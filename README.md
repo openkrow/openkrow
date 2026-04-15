@@ -1,4 +1,4 @@
-# OpenKrow
+# OpenKrow - The ONLY AI-agent you need
 An(other) open-source AI agent help you complete all kinds of tasks.
 
 ## Multi-agent architecture
