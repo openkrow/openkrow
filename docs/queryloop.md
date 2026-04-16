@@ -10,6 +10,9 @@ Key architectural Patterns:
 
 - Parallel Streaming Execution: In Phase 2 and 3, the StreamingToolExecutor parses and fires off concurrency-safe read-only tools while the LLM is still generating its text response, dramatically minimizing latency
 
+
+> Key takeaway: Async generator as control flow. Derived flag instead of API signal. Escalating recover
+
 ## Why async generator?
 The async generator pattern allows the query loop to yield intermediate results (like messages from the LLM or tool execution results) to the UI as they become available, rather than waiting for the entire process to complete. This provides a more responsive user experience, as the UI can update in real-time with the progress of the query. Additionally, it allows for better error handling and control flow, as the UI can decide to stop the loop if the user cancels the operation, preventing unnecessary API calls and resource usage.
 
