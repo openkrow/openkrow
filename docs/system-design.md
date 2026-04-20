@@ -1,866 +1,1328 @@
-# OpenKrow System Architecture
+# OpenKrow — Desktop Agent System Design (Tauri + Bun)
 
-> **Version:** 0.1.0-draft
-> **Last updated:** 2026-04-15
+> **Version:** 0.2.0-draft
+> **Last updated:** 2026-04-20
 > **Status:** Design phase
 
----
+## Overview
 
-## 1. Vision
-
-OpenKrow is a **general-purpose agentic operating system** that runs in the terminal. It is not a coding assistant -- coding is one skill among many. OpenKrow helps users with any task that can be decomposed into tool calls: writing presentations, authoring documents, running scripts, researching topics, managing infrastructure, and anything else that can be extended through skills and MCP servers.
-
-The closest analogy is a personal terminal-native AI that knows who you are, understands the project you're working in, remembers what you discussed yesterday, and can learn new abilities on demand.
+OpenKrow is a desktop coding agent that combines a Tauri shell, a Bun-compiled agent server, and a React frontend into a single distributable application. The agent can edit files, execute shell commands, load specialized skills, and interact with LLM providers — all running locally on the user's machine.
 
 ---
 
-## 2. High-Level Architecture
+## Architecture
 
 ```
-┌──────────────────────────────────────────────────────────────────────┐
-│                          User (Terminal)                             │
-│                                                                      │
-│  openkrow chat    openkrow run "..."    openkrow config              │
-└────────────────────────────┬─────────────────────────────────────────┘
-                             │
-                             ▼
-┌──────────────────────────────────────────────────────────────────────┐
-│                         CLI Layer (apps/openkrow)                     │
-│                                                                      │
-│  Commander parser  ──  Session REPL  ──  TUI renderer                │
-└────────────────────────────┬─────────────────────────────────────────┘
-                             │
-                             ▼
-┌──────────────────────────────────────────────────────────────────────┐
-│                       Orchestrator (OpenKrow)                        │
-│                                                                      │
-│  ┌──────────┐  ┌────────────┐  ┌──────────┐  ┌───────────────────┐  │
-│  │  Config   │  │  Workspace │  │  Router  │  │  Skill Manager    │  │
-│  │  Loader   │  │  Manager   │  │ (model)  │  │  (local + MCP)    │  │
-│  └──────────┘  └────────────┘  └──────────┘  └───────────────────┘  │
-└────────────────────────────┬─────────────────────────────────────────┘
-                             │
-                             ▼
-┌──────────────────────────────────────────────────────────────────────┐
-│                       Agent Runtime (agent-core)                     │
-│                                                                      │
-│  ┌──────────────┐  ┌────────────────┐  ┌──────────────────────────┐ │
-│  │    Agent      │  │  Context Mgr   │  │    Tool Registry         │ │
-│  │  (run loop)   │  │  (budget,      │  │  (builtin + skill tools) │ │
-│  │              │  │   compaction,   │  │                          │ │
-│  │              │  │   memories)     │  │                          │ │
-│  └──────────────┘  └────────────────┘  └──────────────────────────┘ │
-└────────────────────────────┬─────────────────────────────────────────┘
-                             │
-                             ▼
-┌──────────────────────────────────────────────────────────────────────┐
-│                     LLM Provider Layer (@openkrow/ai)                │
-│                                                                      │
-│    OpenAI    │    Anthropic    │    Google    │   (custom/local)      │
-└──────────────────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────┐
+│                        OpenKrow Desktop App                      │
+│                                                                  │
+│  ┌─────────────┐                          ┌────────────────────┐ │
+│  │  React UI   │───── HTTP (REST) ───────▶│  Bun Agent Server  │ │
+│  │  (webview)  │◀──── SSE (streaming) ────│  (localhost:port)  │ │
+│  └──────┬──────┘                          └────────────────────┘ │
+│         │                                          ▲             │
+│         │ invoke (lifecycle only)                   │             │
+│         ▼                                          │             │
+│  ┌─────────────┐       spawn / kill               │             │
+│  │  Tauri Rust │──────────────────────────────────┘             │
+│  └─────────────┘                                                │
+└──────────────────────────────────────────────────────────────────┘
 ```
+
+### Layer Responsibilities
+
+| Layer              | Role                                                     | Talks To                                           |
+| ------------------ | -------------------------------------------------------- | -------------------------------------------------- |
+| **React Frontend** | UI, state management, user interaction                   | Bun Agent (HTTP/SSE), Tauri (invoke for lifecycle) |
+| **Tauri (Rust)**   | Spawn/kill agent process, provide connection info        | Frontend (events), Bun Agent (process management)  |
+| **Bun Agent**      | LLM calls, tool execution, DB writes, context management | LLM APIs (HTTP), filesystem, SQLite                |
+
+### Communication Protocol
+
+- **Frontend ↔ Agent:** HTTP REST + Server-Sent Events (SSE) over localhost
+- **Frontend → Tauri:** Tauri `invoke` commands (only for lifecycle: get agent URL, shutdown)
+- **Tauri → Agent:** Process spawn/kill via OS process management
+- **Auth:** Bearer token (random UUID generated per session by Tauri)
+
+### Why HTTP over stdin/stdout
+
+| Factor           | stdin/stdout             | HTTP (localhost)    |
+| ---------------- | ------------------------ | ------------------- |
+| Multiple windows | Impossible (1 pipe)      | Easy                |
+| Debugging        | Hard                     | `curl` / devtools   |
+| Error recovery   | Process dies = pipe gone | Can reconnect       |
+| Future reuse     | Desktop only             | CLI + web UI later  |
+| Latency overhead | ~0.1ms                   | ~1-2ms (irrelevant) |
 
 ---
 
-## 3. Storage Layout
+## Data Architecture
 
-There are two storage domains: **global** (per-user) and **workspace** (per-project directory).
-
-### 3.1 Global Store: `~/.config/openkrow/`
+### Storage Layout
 
 ```
-~/.config/openkrow/
-├── config.json              # User settings (provider, model, keys, etc.)
-├── profile/
-│   └── personality.json     # Learned user personality profile
-├── skills/
-│   ├── registry.json        # Installed skills manifest
-│   └── <skill-name>/        # Skill definition files (SKILL.md, etc.)
-├── conversations/
-│   └── index.json           # Global index: maps workspace paths -> conversation IDs
-└── models/
-    └── routing.json         # Smart routing rules (which model for what task)
+~/.openkrow/
+├── config.json                 # Global settings (API keys, model, theme)
+├── data.db                     # SQLite — sessions, messages, projects
+├── skills/                     # Global user-installed skills
+│   └── {skill-name}/
+│       └── SKILL.md
+└── projects/{hash}/
+    └── index.db                # Per-project file index / embeddings
+
+Project root:
+└── .agent/
+    ├── instructions.md         # Project-specific system prompt
+    └── skills/                 # Project-specific skills
+        └── {skill-name}/
+            └── SKILL.md
 ```
 
-**Design rules:**
-- `config.json` stores settings only, never secrets. API keys live in env vars.
-- `personality.json` is written by the personality extraction agent, never by the user directly.
-- `registry.json` tracks all installed skills across workspaces.
-- `index.json` enables cross-workspace conversation search.
+### Database Schema (SQLite)
 
-### 3.2 Workspace Store: `.krow/`
+```sql
+-- WAL mode enabled for concurrent reads while writing
+PRAGMA journal_mode = WAL;
+PRAGMA foreign_keys = ON;
 
-Created automatically the first time `openkrow` is run in a directory.
+CREATE TABLE session (
+  id              TEXT PRIMARY KEY,
+  project_path    TEXT NOT NULL,
+  title           TEXT,
+  created_at      INTEGER NOT NULL DEFAULT (unixepoch()),
+  updated_at      INTEGER NOT NULL DEFAULT (unixepoch())
+);
 
+CREATE TABLE message (
+  id              TEXT PRIMARY KEY,
+  session_id      TEXT NOT NULL REFERENCES session(id) ON DELETE CASCADE,
+  role            TEXT NOT NULL,           -- user | assistant | tool
+  content         TEXT NOT NULL,
+  tool_calls      TEXT,                    -- JSON array of tool calls
+  token_usage     INTEGER,
+  created_at      INTEGER NOT NULL DEFAULT (unixepoch())
+);
+
+CREATE TABLE project (
+  path            TEXT PRIMARY KEY,
+  name            TEXT,
+  instructions    TEXT,
+  last_opened     INTEGER NOT NULL DEFAULT (unixepoch())
+);
+
+CREATE TABLE file_index (
+  path            TEXT NOT NULL,
+  project_path    TEXT NOT NULL,
+  hash            TEXT NOT NULL,
+  summary         TEXT,
+  embedding       BLOB,
+  updated_at      INTEGER NOT NULL DEFAULT (unixepoch()),
+  PRIMARY KEY (project_path, path)
+);
 ```
-project-dir/
-├── .krow/
-│   ├── context.json         # Workspace context: project summary, key facts, conventions
-│   ├── memories.json        # Agent memories: important decisions, user corrections, learned facts
-│   ├── conversations/
-│   │   ├── <slug>.json      # Individual conversation (auto-named from first message)
-│   │   └── ...
-│   └── skills/              # Workspace-local skill overrides or custom skills
-│       └── ...
-└── (user's project files)
-```
 
-**Design rules:**
-- `.krow/` should be added to `.gitignore` by default (contains personal context).
-- `context.json` is a condensed summary of the workspace that gets injected into every system prompt.
-- `memories.json` stores persistent facts that survive across conversations ("user prefers tabs over spaces", "the deploy target is AWS us-east-1").
-- Conversations are named by slugifying the first user message: "Fix the login bug" -> `fix-the-login-bug.json`.
+### Data Ownership
+
+| Data                                | Writer               | Reader                        | Format       |
+| ----------------------------------- | -------------------- | ----------------------------- | ------------ |
+| Sessions, messages, tool results    | Bun Agent            | Bun Agent + Tauri (read-only) | SQLite       |
+| App config (API keys, theme, model) | Tauri (via frontend) | Bun Agent (file watch)        | JSON file    |
+| Project metadata, file index        | Bun Agent            | Bun Agent                     | SQLite       |
+| Conversation context (active)       | In-memory (Bun)      | Bun Agent                     | Runtime only |
 
 ---
 
-## 4. Core Subsystems
+## Layer 1: Frontend (React + TypeScript)
 
-### 4.1 Config Loader
-
-**Location:** `packages/agent-core` (or `apps/openkrow/src/config/`)
-
-Resolves configuration from multiple sources with a clear precedence order:
+### Directory Structure
 
 ```
-defaults < config.json < env vars < CLI flags
+src/
+├── main.tsx
+├── App.tsx
+├── stores/
+│   ├── session.ts              # Session state (zustand)
+│   ├── messages.ts             # Message list + streaming
+│   ├── settings.ts             # Config state
+│   └── projects.ts             # Project list
+├── components/
+│   ├── Chat/
+│   │   ├── ChatView.tsx        # Main chat container
+│   │   ├── MessageList.tsx     # Rendered messages
+│   │   ├── MessageBubble.tsx   # Single message (markdown, code blocks)
+│   │   ├── ToolCallBlock.tsx   # Rendered tool results (file diff, terminal output)
+│   │   ├── InputBar.tsx        # User input + attachments
+│   │   └── StreamingText.tsx   # Live token stream
+│   ├── Sidebar/
+│   │   ├── SessionList.tsx     # Past sessions
+│   │   ├── ProjectPicker.tsx   # Open project
+│   │   └── SkillManager.tsx    # Enable/disable skills
+│   ├── Settings/
+│   │   ├── SettingsModal.tsx
+│   │   ├── ModelSelector.tsx
+│   │   └── ApiKeyInput.tsx
+│   └── shared/
+│       ├── CodeBlock.tsx       # Syntax highlighted code
+│       ├── DiffView.tsx        # File diff display
+│       └── Terminal.tsx        # Bash output display
+├── lib/
+│   ├── agent-client.ts         # HTTP/SSE client for agent server
+│   ├── tauri.ts                # Typed invoke wrappers
+│   ├── protocol.ts             # Shared event/message types
+│   └── markdown.ts             # Markdown renderer config
+└── styles/
 ```
+
+### Shared Protocol Types
 
 ```typescript
-interface OpenKrowConfig {
-  provider: "openai" | "anthropic" | "google";
-  model: string;
-  apiKey?: string;
-  baseUrl?: string;
-  maxTokens: number;
-  temperature: number;
-  enableTools: boolean;
-  enableStreaming: boolean;
-  maxTurns: number;
-  systemPrompt?: string;
-  routing?: ModelRoutingConfig;   // smart routing rules
-}
-```
+// src/lib/protocol.ts
 
-### 4.2 Workspace Manager
-
-**Location:** `packages/agent-core` (new module)
-
-Responsible for initializing, loading, and persisting workspace state.
-
-```typescript
-interface WorkspaceManager {
-  /** Initialize .krow/ in the current directory if it doesn't exist */
-  init(dir: string): Promise<Workspace>;
-
-  /** Load an existing workspace from a directory */
-  load(dir: string): Promise<Workspace>;
-
-  /** Get the workspace context summary for system prompt injection */
-  getContext(): WorkspaceContext;
-
-  /** Save a memory to the workspace */
-  addMemory(memory: Memory): Promise<void>;
-
-  /** List past conversations */
-  listConversations(): Promise<ConversationSummary[]>;
-
-  /** Load a specific conversation */
-  loadConversation(id: string): Promise<Conversation>;
-
-  /** Save the current conversation */
-  saveConversation(conversation: Conversation): Promise<void>;
-}
-```
-
-```typescript
-interface Workspace {
-  path: string;                    // absolute path to the project directory
-  context: WorkspaceContext;       // project summary, conventions, key facts
-  memories: Memory[];              // persistent facts
-  conversations: ConversationSummary[];  // past sessions (id + title + timestamp)
-}
-
-interface WorkspaceContext {
-  projectName: string;
-  summary: string;                 // one-paragraph project description
-  techStack: string[];             // detected or user-specified
-  conventions: string[];           // "uses tabs", "prefers functional style", etc.
-  keyFiles: string[];              // important files the agent should know about
-}
-
-interface Memory {
+export interface Message {
   id: string;
-  content: string;                 // the fact or decision
-  source: "agent" | "user";       // who created this memory
-  createdAt: number;
-  tags: string[];
+  role: "user" | "assistant" | "tool";
+  content: string;
+  tool_calls?: Array<{ name: string; args: unknown; result?: unknown }>;
+  token_usage?: number;
+  created_at: number;
 }
+
+export type AgentEvent =
+  | { type: "token"; content: string }
+  | { type: "tool_start"; name: string; args: unknown }
+  | { type: "tool_result"; result: unknown }
+  | { type: "done"; message_id: string }
+  | { type: "error"; message: string }
+  | { type: "status"; status: "thinking" | "tool_executing" | "idle" };
 ```
 
-**Init flow (first run):**
-1. Detect that `.krow/` doesn't exist.
-2. Create the directory structure.
-3. Run a quick scan of the project (package.json, README, file tree).
-4. Generate an initial `context.json` from the scan.
-5. Print a message: "Workspace initialized in .krow/".
-
-### 4.3 Context Manager
-
-**Location:** `packages/agent-core` (new module)
-
-The Context Manager is the brain's working memory. It decides what information gets sent to the LLM on each turn, given a finite token budget.
-
-**Strategy: Sliding window + summary**
-
-```
-┌──────────────────────────────────────────────────────────┐
-│                   SYSTEM PROMPT                           │
-│  Base instructions + workspace context + user personality │
-│  + active skill descriptions                              │
-│  (always present, ~1000-2000 tokens)                      │
-├──────────────────────────────────────────────────────────┤
-│                   SUMMARY BLOCK                           │
-│  Compressed summary of older conversation turns           │
-│  (auto-generated when window overflows)                   │
-│  (~500-1000 tokens)                                       │
-├──────────────────────────────────────────────────────────┤
-│                   CACHED SECTION                          │
-│  Frequently referenced context that doesn't change:       │
-│  - workspace memories                                     │
-│  - pinned file contents                                   │
-│  (uses provider cache APIs where available)               │
-├──────────────────────────────────────────────────────────┤
-│                   ACTIVE CONVERSATION                     │
-│  Recent messages in full (sliding window)                 │
-│  Grows until budget exceeded, then compaction triggers    │
-├──────────────────────────────────────────────────────────┤
-│                   TOOL DEFINITIONS                        │
-│  Builtin tools + active skill tools                       │
-│  (~100-200 tokens per tool)                               │
-└──────────────────────────────────────────────────────────┘
-```
+### Message Store (Zustand)
 
 ```typescript
-interface ContextManager {
-  /** Set the total token budget for this session */
-  setBudget(maxTokens: number): void;
+// src/stores/messages.ts
 
-  /** Get the current token usage breakdown */
-  getUsage(): ContextBudget;
+import { create } from "zustand";
+import { sendMessage as sendToAgent, cancelAgent } from "../lib/agent-client";
+import type { Message } from "../lib/protocol";
 
-  /** Build the full message array for the next LLM call */
-  buildMessages(): ChatMessage[];
-
-  /** Add a new message to the active conversation */
-  addMessage(message: AgentMessage): void;
-
-  /** Pin content to the cached section (e.g., a key file) */
-  pinToCache(key: string, content: string): void;
-
-  /** Remove pinned content */
-  unpinFromCache(key: string): void;
-
-  /** Force compaction of the active conversation */
-  compact(): Promise<void>;
-
-  /** Inject workspace context and personality into the system prompt */
-  setSystemContext(context: WorkspaceContext, personality: UserPersonality): void;
+interface MessageStore {
+  messages: Message[];
+  streaming: string;
+  toolCalls: Array<{ name: string; args: unknown; result?: unknown }>;
+  isLoading: boolean;
+  send: (sessionId: string, content: string) => Promise<void>;
+  cancel: (sessionId: string) => Promise<void>;
+  loadSession: (sessionId: string) => Promise<void>;
 }
 
-interface ContextBudget {
-  total: number;                   // max tokens for the context window
-  system: number;                  // tokens used by system prompt
-  summary: number;                 // tokens used by summary block
-  cached: number;                  // tokens used by cached/pinned content
-  conversation: number;            // tokens used by active messages
-  tools: number;                   // tokens used by tool definitions
-  available: number;               // remaining tokens for the response
-}
-```
+export const useMessages = create<MessageStore>((set, get) => ({
+  messages: [],
+  streaming: "",
+  toolCalls: [],
+  isLoading: false,
 
-**Auto-compaction trigger:**
-When `conversation` tokens exceed 60% of `total`, the Context Manager:
-1. Takes all messages except the last N turns (configurable, default 4).
-2. Sends them to a cheap/fast model with the prompt: "Summarize this conversation so far, preserving key decisions, file paths mentioned, and the current task state."
-3. Replaces those messages with the summary block.
-4. Emits a `context:compacted` event so the UI can indicate this.
-
-### 4.4 Agent Runtime
-
-**Location:** `packages/agent-core`
-
-The core agent loop. This is the existing `Agent` class, extended with the Context Manager and workspace awareness.
-
-```
-User message
-     │
-     ▼
-┌─────────────┐     ┌──────────────┐
-│ Context Mgr │────▶│  Build msgs  │
-│ addMessage() │     │  (budget-    │
-└─────────────┘     │   aware)     │
-                    └──────┬───────┘
-                           │
-                           ▼
-                    ┌──────────────┐
-                    │  LLM Call    │──── (via Router)
-                    │  (chat or    │
-                    │   stream)    │
-                    └──────┬───────┘
-                           │
-              ┌────────────┴────────────┐
-              │                         │
-         Text response            Tool calls
-              │                         │
-              ▼                         ▼
-         Return to user          ┌──────────────┐
-                                 │ Tool Registry │
-                                 │  .execute()   │
-                                 └──────┬───────┘
-                                        │
-                                        ▼
-                                 Tool results added
-                                 to Context Mgr
-                                        │
-                                        ▼
-                                 Loop back to LLM
-                                 (until no tool calls
-                                  or max turns)
-```
-
-**Key changes from current implementation:**
-- `Agent` no longer builds messages directly -- it delegates to `ContextManager`.
-- `Agent` no longer creates `LLMClient` directly -- it uses the `Router`.
-- The `ConversationState` class is absorbed into `ContextManager` (which handles both state and budget).
-
-### 4.5 Model Router
-
-**Location:** `packages/ai` (new module)
-
-Routes LLM requests to the appropriate provider/model based on the task type.
-
-```typescript
-interface ModelRouter {
-  /** Route a standard chat/tool-use request to the primary model */
-  chat(messages: ChatMessage[], options?: ChatOptions): Promise<ChatResponse>;
-
-  /** Route a streaming request */
-  stream(messages: ChatMessage[], options?: ChatOptions): AsyncIterable<StreamEvent>;
-
-  /** Route a background task to a cheap model */
-  background(task: BackgroundTask): Promise<string>;
-}
-
-type BackgroundTask =
-  | { type: "summarize"; content: string }
-  | { type: "extract_personality"; conversations: string[] }
-  | { type: "generate_title"; firstMessage: string }
-  | { type: "generate_context"; fileTree: string; readme: string };
-
-interface ModelRoutingConfig {
-  primary: { provider: string; model: string };          // main model for user tasks
-  background: { provider: string; model: string };       // cheap model for summaries, extraction
-}
-```
-
-**Default routing:**
-| Task | Default Model |
-|------|--------------|
-| User chat / tool use | User's configured primary model |
-| Conversation summary (compaction) | Background model (e.g., `gpt-4o-mini`, `claude-3-5-haiku`) |
-| Personality extraction | Background model |
-| Conversation title generation | Background model |
-| Workspace context generation | Background model |
-
-### 4.6 Tool Registry & Builtin Tools
-
-**Location:** `packages/agent-core` (registry) + `apps/openkrow` (builtins)
-
-The tool registry is the existing `ToolRegistry` class. The builtin tool set is redesigned for general-purpose use:
-
-| Tool | Description | Category |
-|------|------------|----------|
-| `bash` | Execute shell commands | System |
-| `read_file` | Read file contents with line numbers | Filesystem |
-| `write_file` | Create or overwrite files | Filesystem |
-| `edit_file` | Surgical string replacement in files | Filesystem |
-| `list_files` | Glob-based file listing | Filesystem |
-| `grep` | Regex search across files | Filesystem |
-| `web_search` | Search the web (via provider API) | Web |
-| `web_fetch` | Fetch and parse a URL | Web |
-| `question` | Ask the user a clarifying question with structured options | Interaction |
-| `todo` | Create and manage a task list for the current session | Planning |
-
-```typescript
-// The `question` tool -- lets the agent ask the user for clarification
-const questionTool: Tool = {
-  definition: {
-    name: "question",
-    description: "Ask the user a question to clarify their intent. Can present multiple-choice options or free-form input.",
-    parameters: {
-      type: "object",
-      properties: {
-        question: { type: "string", description: "The question to ask" },
-        options: {
-          type: "array",
-          items: {
-            type: "object",
-            properties: {
-              label: { type: "string" },
-              description: { type: "string" }
-            }
-          },
-          description: "Optional choices to present"
+  send: async (sessionId, content) => {
+    set((s) => ({
+      messages: [
+        ...s.messages,
+        {
+          id: crypto.randomUUID(),
+          role: "user",
+          content,
+          created_at: Date.now(),
         },
-        multiple: { type: "boolean", description: "Allow selecting multiple options" }
+      ],
+      isLoading: true,
+      streaming: "",
+      toolCalls: [],
+    }));
+
+    await sendToAgent(sessionId, content, {
+      onToken: (token) => {
+        set((s) => ({ streaming: s.streaming + token }));
       },
-      required: ["question"]
-    }
+      onToolStart: (name, args) => {
+        set((s) => ({
+          toolCalls: [...s.toolCalls, { name, args }],
+        }));
+      },
+      onToolResult: (result) => {
+        set((s) => ({
+          toolCalls: s.toolCalls.map((tc, i) =>
+            i === s.toolCalls.length - 1 ? { ...tc, result } : tc,
+          ),
+        }));
+      },
+      onDone: () => {
+        set((s) => ({
+          messages: [
+            ...s.messages,
+            {
+              id: crypto.randomUUID(),
+              role: "assistant",
+              content: s.streaming,
+              tool_calls: s.toolCalls.length ? s.toolCalls : undefined,
+              created_at: Date.now(),
+            },
+          ],
+          streaming: "",
+          toolCalls: [],
+          isLoading: false,
+        }));
+      },
+      onError: () => {
+        set({ isLoading: false });
+      },
+    });
   },
-  async execute(args) {
-    // Implementation delegates to the TUI layer to render the question
-    // and waits for user input before returning
+
+  cancel: async (sessionId) => {
+    await cancelAgent(sessionId);
+    set({ isLoading: false });
+  },
+
+  loadSession: async (sessionId) => {
+    const { getConnection } = await import("../lib/agent-client");
+    const { url, token } = await getConnection();
+    const res = await fetch(`${url}/sessions/${sessionId}/messages`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const messages = await res.json();
+    set({ messages, streaming: "", isLoading: false });
+  },
+}));
+```
+
+### Agent Client (HTTP + SSE)
+
+```typescript
+// src/lib/agent-client.ts
+
+import { invoke } from "@tauri-apps/api/core";
+
+let connection: { url: string; token: string } | null = null;
+
+export async function getConnection() {
+  if (!connection) {
+    connection = await invoke<{ url: string; token: string }>("get_agent_url");
   }
-};
-```
-
-### 4.7 Skill Manager
-
-**Location:** `packages/agent-core` (new module)
-
-Skills extend the agent's capabilities. Two types are supported:
-
-#### Local Skill Files
-
-A skill is a directory containing a `SKILL.md` file that describes tools, prompts, and resources. The format follows the structure used by Anthropic's Claude tooling ecosystem.
-
-```
-~/.config/openkrow/skills/
-└── google-docs/
-    ├── SKILL.md              # Skill definition (name, description, tools, prompts)
-    ├── tools/
-    │   ├── create-doc.json   # Tool definition (JSON Schema)
-    │   └── edit-doc.json
-    └── resources/
-        └── templates/        # Static resources the skill can reference
-```
-
-**SKILL.md format:**
-```markdown
-# Google Docs
-
-Create and edit Google Docs from the terminal.
-
-## Tools
-
-- create_doc: Create a new Google Doc with the given title and content.
-- edit_doc: Edit an existing Google Doc by ID.
-
-## Setup
-
-Requires GOOGLE_DOCS_API_KEY environment variable.
-```
-
-#### MCP Server Connections
-
-Skills can also be MCP (Model Context Protocol) servers -- external processes that expose tools, prompts, and resources over stdio or HTTP.
-
-```typescript
-interface SkillManager {
-  /** List all installed skills */
-  list(): Skill[];
-
-  /** Install a skill from a path or registry */
-  install(source: string): Promise<Skill>;
-
-  /** Uninstall a skill */
-  uninstall(name: string): Promise<void>;
-
-  /** Connect to an MCP server */
-  connectMCP(config: MCPServerConfig): Promise<Skill>;
-
-  /** Get all tool definitions from all active skills */
-  getToolDefinitions(): ToolDefinition[];
-
-  /** Execute a tool from a skill */
-  executeTool(skillName: string, toolName: string, args: Record<string, unknown>): Promise<ToolResult>;
+  return connection;
 }
 
-interface Skill {
-  name: string;
-  description: string;
-  type: "local" | "mcp";
-  tools: ToolDefinition[];
-  enabled: boolean;
+export async function sendMessage(
+  sessionId: string,
+  content: string,
+  callbacks: {
+    onToken: (t: string) => void;
+    onToolStart: (name: string, args: unknown) => void;
+    onToolResult: (result: unknown) => void;
+    onDone: () => void;
+    onError: (err: string) => void;
+  },
+) {
+  const { url, token } = await getConnection();
+
+  const res = await fetch(`${url}/sessions/${sessionId}/messages`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ content }),
+  });
+
+  const reader = res.body!.getReader();
+  const decoder = new TextDecoder();
+  let buf = "";
+  let currentEvent = "";
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buf += decoder.decode(value, { stream: true });
+
+    const lines = buf.split("\n");
+    buf = lines.pop()!;
+
+    for (const line of lines) {
+      if (line.startsWith("event: ")) {
+        currentEvent = line.slice(7);
+      } else if (line.startsWith("data: ")) {
+        const data = line.slice(6);
+        switch (currentEvent) {
+          case "token":
+            callbacks.onToken(data);
+            break;
+          case "tool_start": {
+            const parsed = JSON.parse(data);
+            callbacks.onToolStart(parsed.name, parsed.args);
+            break;
+          }
+          case "tool_result":
+            callbacks.onToolResult(JSON.parse(data));
+            break;
+          case "done":
+            callbacks.onDone();
+            break;
+          case "error":
+            callbacks.onError(data);
+            break;
+        }
+      }
+    }
+  }
 }
 
-interface MCPServerConfig {
-  name: string;
-  command: string;           // for stdio servers
-  args?: string[];
-  url?: string;              // for HTTP servers
-  env?: Record<string, string>;
+export async function createSession(projectPath: string) {
+  const { url, token } = await getConnection();
+  const res = await fetch(`${url}/sessions`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ project_path: projectPath }),
+  });
+  return res.json();
 }
-```
 
-### 4.8 User Personality System
-
-**Location:** `packages/agent-core` (new module)
-
-The personality system learns about the user from their interactions and adapts the agent's behavior accordingly.
-
-**Storage:** `~/.config/openkrow/profile/personality.json`
-
-```typescript
-interface UserPersonality {
-  /** Overall communication style preferences */
-  communicationStyle: {
-    verbosity: "concise" | "moderate" | "detailed";
-    formality: "casual" | "neutral" | "formal";
-    explanationDepth: "minimal" | "moderate" | "thorough";
-  };
-
-  /** Technical preferences */
-  technical: {
-    expertiseLevel: "beginner" | "intermediate" | "advanced" | "expert";
-    preferredLanguages: string[];
-    preferredTools: string[];
-    codingStyle: string[];           // "functional", "uses-semicolons", "prefers-const", etc.
-  };
-
-  /** Behavioral observations */
-  observations: string[];            // free-form learned facts
-                                      // "prefers to see diffs before applying changes"
-                                      // "likes to be asked before destructive operations"
-                                      // "often works on TypeScript monorepos"
-
-  /** Metadata */
-  lastUpdated: number;
-  sessionsAnalyzed: number;
-  version: number;
+export async function cancelAgent(sessionId: string) {
+  const { url, token } = await getConnection();
+  await fetch(`${url}/sessions/${sessionId}/cancel`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+  });
 }
-```
-
-**Extraction flow:**
-
-```
-Session ends (10+ turns)
-        │
-        ▼
-  sessionsAnalyzed++ ; if (sessionsAnalyzed % N === 0):
-        │
-        ▼
-  Load last N unanalyzed conversations
-        │
-        ▼
-  Send to background model with extraction prompt:
-  "Analyze these conversations and extract/update
-   the user's personality profile. Preserve existing
-   observations, add new ones, resolve conflicts."
-        │
-        ▼
-  Merge result into personality.json
-```
-
-The personality is injected into the system prompt as a "User Context" section:
-
-```
-## User Context
-- Communication: concise, casual
-- Expertise: advanced TypeScript developer
-- Preferences: prefers functional style, uses strict TS, likes detailed error messages
-- Observations: often works on monorepos, prefers seeing diffs before edits
 ```
 
 ---
 
-## 5. Data Flow: Complete Request Lifecycle
+## Layer 2: Tauri (Rust)
+
+### Directory Structure
 
 ```
-1. User types: "Create a presentation about our Q4 results"
-                    │
-2. CLI layer receives input
-                    │
-3. Orchestrator:
-   ├── WorkspaceManager.getContext()     -> workspace summary
-   ├── PersonalityLoader.load()          -> user profile
-   ├── SkillManager.getToolDefinitions() -> skill tools
-   └── ContextManager.addMessage(user)
-                    │
-4. ContextManager.buildMessages():
-   ├── System prompt + workspace context + personality
-   ├── Summary block (if conversation was compacted)
-   ├── Cached/pinned content
-   ├── Active conversation (sliding window)
-   └── Tool definitions (builtin + skills)
-                    │
-5. Router.chat(messages) -> routes to primary model
-                    │
-6. LLM responds with tool calls:
-   [{ name: "question", args: { question: "What format?", options: [...] } }]
-                    │
-7. Agent executes tool -> TUI renders question -> user answers
-                    │
-8. Tool result added to ContextManager -> loop back to step 4
-                    │
-9. LLM responds with more tool calls:
-   [{ name: "write_file", args: { path: "q4-results.pptx.md", content: "..." } }]
-                    │
-10. Agent executes tool -> file written
-                     │
-11. LLM responds with text (no tool calls) -> final response
-                     │
-12. Orchestrator:
-    ├── ContextManager persists conversation to .krow/conversations/
-    ├── Update global index
-    └── If session substantial, check personality extraction trigger
+src-tauri/
+├── Cargo.toml
+├── tauri.conf.json
+├── resources/
+│   └── agent-bin               # Bun-compiled agent binary
+├── src/
+│   ├── main.rs                 # Entry point
+│   ├── agent.rs                # Bun process lifecycle
+│   ├── commands.rs             # Tauri commands
+│   └── config.rs               # Config read/write
 ```
 
----
+### main.rs
 
-## 6. Package Responsibilities (Revised)
+```rust
+mod agent;
+mod commands;
+mod config;
 
-### `@openkrow/ai`
-The LLM abstraction layer. Provider-agnostic interface for chat, streaming, and model listing. Also contains the **Model Router** for smart routing.
+use agent::AgentServer;
+use tauri::Manager;
 
-| Module | Responsibility |
-|--------|---------------|
-| `types.ts` | Core types: ChatMessage, ChatResponse, StreamEvent, ToolDefinition |
-| `client.ts` | LLMClient factory |
-| `router.ts` | **NEW** - Smart model routing based on task type |
-| `providers/` | OpenAI, Anthropic, Google implementations |
-
-### `@openkrow/agent-core`
-The agent runtime. Owns the run loop, context management, tool execution, workspace management, skill integration, and personality system.
-
-| Module | Responsibility |
-|--------|---------------|
-| `agent.ts` | Core run loop (LLM call -> tool execution -> loop) |
-| `context.ts` | **NEW** - Context Manager (budget, compaction, sliding window) |
-| `workspace.ts` | **NEW** - Workspace init, load, persist (.krow/) |
-| `skills.ts` | **NEW** - Skill Manager (local files + MCP connections) |
-| `personality.ts` | **NEW** - Personality loader and extraction trigger |
-| `tools.ts` | Tool Registry |
-| `types.ts` | All shared types |
-
-### `@openkrow/tui`
-Terminal UI components. Used by the CLI layer for rendering chat, questions, spinners, progress.
-
-### `@openkrow/app` (apps/openkrow)
-The main user-facing CLI application. Thin layer that wires together all packages.
-
-| Module | Responsibility |
-|--------|---------------|
-| `cli.ts` | Commander-based CLI parser |
-| `commands/` | Command handlers (chat, run, config, skills) |
-| `tools.ts` | Builtin tool implementations (bash, read, write, web, question, todo) |
-| `config/` | Config file loading |
-
----
-
-## 7. Workspace Initialization Flow
-
-```
-$ cd ~/projects/my-app
-$ openkrow
-
-   Is .krow/ present?
-         │
-    ┌────┴────┐
-    No        Yes
-    │          │
-    ▼          ▼
-  Create     Load
-  .krow/     .krow/context.json
-    │        .krow/memories.json
-    ▼
-  Scan project:
-  - Read package.json / Cargo.toml / etc.
-  - Read README.md (first 200 lines)
-  - List top-level file tree
-    │
-    ▼
-  Send to background model:
-  "Generate a project context summary"
-    │
-    ▼
-  Write .krow/context.json
-  Write .krow/memories.json (empty)
-  Write .krow/conversations/ (empty dir)
-    │
-    ▼
-  Print: "Workspace initialized."
-  Start interactive session.
-```
-
----
-
-## 8. Conversation Persistence
-
-Each conversation is stored as a JSON file in `.krow/conversations/`.
-
-**Naming:** Auto-generated from the first user message.
-- "Fix the login bug" -> `fix-the-login-bug.json`
-- "Create a presentation about Q4" -> `create-a-presentation-about-q4.json`
-- Collisions appended with `-2`, `-3`, etc.
-
-```typescript
-interface PersistedConversation {
-  id: string;
-  title: string;                   // human-readable, from first message
-  workspacePath: string;
-  messages: AgentMessage[];
-  summaryBlocks: string[];         // compaction summaries generated during the session
-  memories: Memory[];              // memories created during this conversation
-  startedAt: number;
-  lastActiveAt: number;
-  turns: number;
-  tokenUsage: {
-    prompt: number;
-    completion: number;
-    total: number;
-  };
+fn main() {
+    tauri::Builder::default()
+        .manage(AgentServer::new())
+        .invoke_handler(tauri::generate_handler![
+            commands::get_agent_url,
+            commands::save_config,
+            commands::get_config,
+        ])
+        .setup(|app| {
+            let handle = app.handle().clone();
+            tauri::async_runtime::spawn(async move {
+                let state = handle.state::<AgentServer>();
+                state.spawn(&handle).await.expect("failed to start agent");
+            });
+            Ok(())
+        })
+        .on_window_event(|window, event| {
+            if let tauri::WindowEvent::Destroyed = event {
+                let state = window.state::<AgentServer>();
+                state.kill();
+            }
+        })
+        .run(tauri::generate_context!())
+        .expect("error running app");
 }
 ```
 
-**Global index** at `~/.config/openkrow/conversations/index.json`:
+### agent.rs
 
-```typescript
-interface GlobalConversationIndex {
-  conversations: Array<{
-    id: string;
-    title: string;
-    workspacePath: string;
-    startedAt: number;
-    lastActiveAt: number;
-    turns: number;
-  }>;
+```rust
+use std::io::{BufRead, BufReader};
+use std::process::{Child, Command, Stdio};
+use std::sync::Mutex;
+use tauri::AppHandle;
+
+pub struct AgentServer {
+    child: Mutex<Option<Child>>,
+    port: Mutex<Option<u16>>,
+    pub token: String,
+}
+
+impl AgentServer {
+    pub fn new() -> Self {
+        Self {
+            child: Mutex::new(None),
+            port: Mutex::new(None),
+            token: uuid::Uuid::new_v4().to_string(),
+        }
+    }
+
+    pub async fn spawn(&self, app: &AppHandle) -> Result<u16, String> {
+        let resource_dir = app.path().resource_dir().map_err(|e| e.to_string())?;
+        let agent_bin = resource_dir.join("agent-bin");
+        let data_dir = dirs::home_dir().unwrap().join(".openkrow");
+
+        std::fs::create_dir_all(&data_dir).ok();
+
+        let mut child = Command::new(&agent_bin)
+            .env("AUTH_TOKEN", &self.token)
+            .env("PORT", "0")
+            .env("DATA_DIR", data_dir.to_str().unwrap())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .map_err(|e| e.to_string())?;
+
+        // Agent prints {"port": N} on first line of stdout
+        let stdout = child.stdout.take().unwrap();
+        let mut reader = BufReader::new(stdout);
+        let mut first_line = String::new();
+        reader.read_line(&mut first_line).map_err(|e| e.to_string())?;
+
+        let info: serde_json::Value =
+            serde_json::from_str(&first_line).map_err(|e| e.to_string())?;
+        let port = info["port"].as_u64().unwrap() as u16;
+
+        // Log stderr in background
+        let stderr = child.stderr.take().unwrap();
+        std::thread::spawn(move || {
+            let reader = BufReader::new(stderr);
+            for line in reader.lines().flatten() {
+                eprintln!("[agent] {}", line);
+            }
+        });
+
+        *self.child.lock().unwrap() = Some(child);
+        *self.port.lock().unwrap() = Some(port);
+
+        Ok(port)
+    }
+
+    pub fn port(&self) -> Option<u16> {
+        *self.port.lock().unwrap()
+    }
+
+    pub fn kill(&self) {
+        if let Some(mut child) = self.child.lock().unwrap().take() {
+            let _ = child.kill();
+        }
+    }
 }
 ```
 
-This enables searching conversations across workspaces: "What did I decide about the database schema last week?"
+### commands.rs
 
----
+```rust
+use tauri::State;
+use crate::agent::AgentServer;
+use crate::config;
 
-## 9. Smart Routing Configuration
+#[derive(serde::Serialize)]
+pub struct AgentConnection {
+    url: String,
+    token: String,
+}
+
+#[tauri::command]
+pub fn get_agent_url(state: State<'_, AgentServer>) -> Result<AgentConnection, String> {
+    let port = state.port().ok_or("agent not started")?;
+    Ok(AgentConnection {
+        url: format!("http://127.0.0.1:{}", port),
+        token: state.token.clone(),
+    })
+}
+
+#[tauri::command]
+pub fn save_config(config: serde_json::Value) -> Result<(), String> {
+    config::save(&config)
+}
+
+#[tauri::command]
+pub fn get_config() -> Result<serde_json::Value, String> {
+    config::load()
+}
+```
+
+### config.rs
+
+```rust
+use std::fs;
+use std::path::PathBuf;
+
+fn config_path() -> PathBuf {
+    dirs::home_dir().unwrap().join(".openkrow/config.json")
+}
+
+pub fn load() -> Result<serde_json::Value, String> {
+    let path = config_path();
+    if !path.exists() {
+        return Ok(serde_json::json!({
+            "provider": "anthropic",
+            "model": "claude-sonnet-4-20250514",
+            "api_keys": {},
+            "max_context_tokens": 128000,
+            "theme": "dark"
+        }));
+    }
+    let content = fs::read_to_string(path).map_err(|e| e.to_string())?;
+    serde_json::from_str(&content).map_err(|e| e.to_string())
+}
+
+pub fn save(config: &serde_json::Value) -> Result<(), String> {
+    let path = config_path();
+    fs::create_dir_all(path.parent().unwrap()).map_err(|e| e.to_string())?;
+    fs::write(path, serde_json::to_string_pretty(config).unwrap())
+        .map_err(|e| e.to_string())
+}
+```
+
+### tauri.conf.json
 
 ```json
 {
-  "primary": {
-    "provider": "anthropic",
-    "model": "claude-sonnet-4-20250514"
+  "productName": "OpenKrow",
+  "identifier": "com.openkrow.app",
+  "build": {
+    "frontendDist": "../dist"
   },
-  "background": {
-    "provider": "anthropic",
-    "model": "claude-3-5-haiku-20241022"
+  "bundle": {
+    "active": true,
+    "targets": ["dmg", "nsis", "deb"],
+    "resources": {
+      "resources/agent-bin": "agent-bin"
+    },
+    "icon": ["icons/icon.png"]
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "OpenKrow",
+        "width": 1200,
+        "height": 800,
+        "minWidth": 800,
+        "minHeight": 600
+      }
+    ]
   }
 }
 ```
 
-The router automatically selects the model:
+---
 
-| Operation | Model Used | Reason |
-|-----------|-----------|--------|
-| User chat / tool calls | primary | Needs strongest reasoning |
-| Context compaction (summary) | background | Mechanical task, save cost |
-| Personality extraction | background | Runs offline, doesn't need top quality |
-| Conversation title | background | Single sentence generation |
-| Workspace context generation | background | One-time scan summary |
+## Layer 3: Bun Agent Server
+
+### Directory Structure
+
+```
+agent/
+├── index.ts                        # Entry point — HTTP server
+├── src/
+│   ├── loop.ts                     # Agent loop (LLM ↔ tools)
+│   ├── llm/
+│   │   ├── client.ts               # LLM API client (streaming)
+│   │   ├── context.ts              # Context window management
+│   │   └── providers/
+│   │       ├── anthropic.ts        # Anthropic Claude
+│   │       ├── openai.ts           # OpenAI GPT
+│   │       └── types.ts            # Shared LLM types
+│   ├── tools/
+│   │   ├── index.ts                # Tool registry + definitions
+│   │   ├── read.ts                 # Read file
+│   │   ├── edit.ts                 # Edit file (string replace)
+│   │   ├── write.ts                # Write new file
+│   │   ├── bash.ts                 # Shell command execution
+│   │   ├── glob.ts                 # File pattern search
+│   │   ├── grep.ts                 # Content search
+│   │   ├── skill.ts                # Load skill instructions
+│   │   └── web.ts                  # Fetch URL content
+│   ├── db/
+│   │   ├── index.ts                # Database connection + schema
+│   │   ├── sessions.ts             # Session CRUD
+│   │   ├── messages.ts             # Message persistence
+│   │   └── file-index.ts           # File indexing
+│   ├── skills/
+│   │   ├── loader.ts               # Skill discovery + loading
+│   │   └── builtin/                # Bundled skills
+│   │       ├── typescript/SKILL.md
+│   │       ├── react/SKILL.md
+│   │       └── rust/SKILL.md
+│   ├── prompts/
+│   │   ├── system.ts               # System prompt builder
+│   │   └── templates/
+│   │       └── base.md             # Base system prompt
+│   └── config.ts                   # Config loader + file watcher
+└── tsconfig.json
+```
+
+### index.ts (HTTP Server Entry Point)
+
+```typescript
+// agent/index.ts
+
+import { Hono } from "hono";
+import { streamSSE } from "hono/streaming";
+import { runAgent, cancelSession } from "./src/loop";
+import { createSession, listSessions } from "./src/db/sessions";
+import { listMessages } from "./src/db/messages";
+
+const app = new Hono();
+const AUTH_TOKEN = process.env.AUTH_TOKEN!;
+
+// Auth middleware
+app.use("*", async (c, next) => {
+  const token = c.req.header("Authorization")?.replace("Bearer ", "");
+  if (token !== AUTH_TOKEN) return c.json({ error: "unauthorized" }, 401);
+  await next();
+});
+
+// Health check
+app.get("/health", (c) => c.json({ ok: true }));
+
+// Sessions
+app.get("/sessions", async (c) => {
+  const projectPath = c.req.query("project_path");
+  return c.json(listSessions(projectPath));
+});
+
+app.post("/sessions", async (c) => {
+  const body = await c.req.json();
+  const session = createSession(body.project_path);
+  return c.json(session);
+});
+
+// Messages
+app.get("/sessions/:id/messages", (c) => {
+  return c.json(listMessages(c.req.param("id")));
+});
+
+app.post("/sessions/:id/messages", (c) => {
+  const sessionId = c.req.param("id");
+
+  return streamSSE(c, async (stream) => {
+    const body = await c.req.json();
+
+    await runAgent(sessionId, body.content, {
+      onToken: (content) => stream.writeSSE({ event: "token", data: content }),
+      onToolStart: (name, args) =>
+        stream.writeSSE({
+          event: "tool_start",
+          data: JSON.stringify({ name, args }),
+        }),
+      onToolResult: (result) =>
+        stream.writeSSE({
+          event: "tool_result",
+          data: JSON.stringify(result),
+        }),
+      onDone: (messageId) =>
+        stream.writeSSE({ event: "done", data: messageId }),
+      onError: (message) => stream.writeSSE({ event: "error", data: message }),
+      signal: c.req.raw.signal,
+    });
+  });
+});
+
+// Cancel
+app.post("/sessions/:id/cancel", (c) => {
+  cancelSession(c.req.param("id"));
+  return c.json({ ok: true });
+});
+
+// Start server, print port for Tauri to read
+const port = parseInt(process.env.PORT || "0");
+const server = Bun.serve({ port, fetch: app.fetch });
+console.log(JSON.stringify({ port: server.port }));
+```
+
+### src/loop.ts (Agent Loop)
+
+```typescript
+import { callLLM } from "./llm/client";
+import { trimContext } from "./llm/context";
+import { executeTool, toolDefinitions } from "./tools";
+import { saveMessage } from "./db/messages";
+import { loadConfig } from "./config";
+import { buildSystemPrompt } from "./prompts/system";
+import { getSession } from "./db/sessions";
+import type { Message } from "./llm/providers/types";
+
+interface AgentCallbacks {
+  onToken: (content: string) => void;
+  onToolStart: (name: string, args: unknown) => void;
+  onToolResult: (result: unknown) => void;
+  onDone: (messageId: string) => void;
+  onError: (message: string) => void;
+  signal: AbortSignal;
+}
+
+// Active sessions hold in-memory context
+const activeSessions = new Map<
+  string,
+  { projectPath: string; messages: Message[] }
+>();
+
+const abortControllers = new Map<string, AbortController>();
+
+export async function runAgent(
+  sessionId: string,
+  userContent: string,
+  cb: AgentCallbacks,
+) {
+  const session = getSession(sessionId);
+  if (!session) {
+    cb.onError("session not found");
+    return;
+  }
+
+  // Initialize or retrieve in-memory context
+  if (!activeSessions.has(sessionId)) {
+    activeSessions.set(sessionId, {
+      projectPath: session.project_path,
+      messages: [],
+    });
+  }
+  const ctx = activeSessions.get(sessionId)!;
+
+  // Track abort controller for cancel support
+  const ac = new AbortController();
+  abortControllers.set(sessionId, ac);
+  const signal = ac.signal;
+
+  // Add user message
+  ctx.messages.push({ role: "user", content: userContent });
+  saveMessage(sessionId, "user", userContent);
+
+  const config = loadConfig();
+  const systemPrompt = await buildSystemPrompt(ctx.projectPath);
+
+  while (!signal.aborted) {
+    const contextMessages = trimContext(
+      ctx.messages,
+      config.max_context_tokens,
+    );
+
+    const response = await callLLM({
+      provider: config.provider,
+      model: config.model,
+      apiKey: config.api_keys[config.provider],
+      system: systemPrompt,
+      messages: contextMessages,
+      tools: toolDefinitions,
+      signal,
+      onToken: cb.onToken,
+    });
+
+    if (signal.aborted) break;
+
+    ctx.messages.push({
+      role: "assistant",
+      content: response.content,
+      tool_calls: response.toolCalls,
+    });
+    saveMessage(
+      sessionId,
+      "assistant",
+      response.content,
+      response.toolCalls,
+      response.usage,
+    );
+
+    // No tool calls — agent is done
+    if (!response.toolCalls?.length) {
+      cb.onDone(crypto.randomUUID());
+      break;
+    }
+
+    // Execute each tool call
+    for (const call of response.toolCalls) {
+      if (signal.aborted) break;
+
+      cb.onToolStart(call.name, call.args);
+      const result = await executeTool(call.name, call.args, ctx.projectPath);
+      cb.onToolResult(result);
+
+      ctx.messages.push({
+        role: "tool",
+        tool_call_id: call.id,
+        content: JSON.stringify(result),
+      });
+      saveMessage(sessionId, "tool", JSON.stringify(result));
+    }
+  }
+
+  abortControllers.delete(sessionId);
+}
+
+export function cancelSession(sessionId: string) {
+  abortControllers.get(sessionId)?.abort();
+}
+```
+
+### src/tools/index.ts (Tool Registry)
+
+```typescript
+import { readFileTool } from "./read";
+import { editFileTool } from "./edit";
+import { writeFileTool } from "./write";
+import { bashTool } from "./bash";
+import { globTool } from "./glob";
+import { grepTool } from "./grep";
+import { skillTool } from "./skill";
+import { webTool } from "./web";
+
+interface ToolDef {
+  name: string;
+  description: string;
+  input_schema: Record<string, unknown>;
+  execute: (
+    args: Record<string, unknown>,
+    projectPath: string,
+  ) => Promise<unknown>;
+}
+
+const tools: ToolDef[] = [
+  readFileTool,
+  editFileTool,
+  writeFileTool,
+  bashTool,
+  globTool,
+  grepTool,
+  skillTool,
+  webTool,
+];
+
+export const toolDefinitions = tools.map(({ execute, ...def }) => def);
+
+export async function executeTool(
+  name: string,
+  args: Record<string, unknown>,
+  projectPath: string,
+) {
+  const tool = tools.find((t) => t.name === name);
+  if (!tool) return { error: `unknown tool: ${name}` };
+
+  try {
+    return await tool.execute(args, projectPath);
+  } catch (e) {
+    return { error: String(e) };
+  }
+}
+```
+
+### src/tools/edit.ts
+
+```typescript
+import { readFileSync, writeFileSync } from "fs";
+import { resolve } from "path";
+
+export const editFileTool = {
+  name: "edit_file",
+  description:
+    "Edit a file by replacing an exact string match with new content. The old_string must appear exactly once.",
+  input_schema: {
+    type: "object",
+    properties: {
+      path: {
+        type: "string",
+        description: "File path relative to project root",
+      },
+      old_string: { type: "string", description: "Exact string to find" },
+      new_string: { type: "string", description: "Replacement string" },
+    },
+    required: ["path", "old_string", "new_string"],
+  },
+  execute: async (args: Record<string, unknown>, projectPath: string) => {
+    const filePath = resolve(projectPath, args.path as string);
+    if (!filePath.startsWith(projectPath))
+      return { error: "path outside project" };
+
+    const content = readFileSync(filePath, "utf-8");
+    const oldStr = args.old_string as string;
+    const occurrences = content.split(oldStr).length - 1;
+
+    if (occurrences === 0) return { error: "old_string not found in file" };
+    if (occurrences > 1)
+      return {
+        error: `found ${occurrences} matches — provide more context`,
+      };
+
+    writeFileSync(filePath, content.replace(oldStr, args.new_string as string));
+    return { success: true, path: args.path };
+  },
+};
+```
+
+### src/tools/bash.ts
+
+```typescript
+import { resolve } from "path";
+
+export const bashTool = {
+  name: "bash",
+  description:
+    "Execute a shell command and return stdout, stderr, and exit code",
+  input_schema: {
+    type: "object",
+    properties: {
+      command: { type: "string", description: "The command to execute" },
+      workdir: {
+        type: "string",
+        description: "Working directory relative to project root",
+      },
+      timeout: {
+        type: "number",
+        description: "Timeout in ms (default 120000)",
+      },
+    },
+    required: ["command"],
+  },
+  execute: async (args: Record<string, unknown>, projectPath: string) => {
+    const cwd = args.workdir
+      ? resolve(projectPath, args.workdir as string)
+      : projectPath;
+    const timeout = (args.timeout as number) || 120_000;
+
+    const proc = Bun.spawn(["sh", "-c", args.command as string], {
+      cwd,
+      stdout: "pipe",
+      stderr: "pipe",
+      env: { ...process.env, HOME: process.env.HOME },
+    });
+
+    const timer = setTimeout(() => proc.kill(), timeout);
+    const [stdout, stderr] = await Promise.all([
+      new Response(proc.stdout).text(),
+      new Response(proc.stderr).text(),
+    ]);
+    clearTimeout(timer);
+    const exitCode = await proc.exited;
+
+    const maxLen = 50_000;
+    return {
+      stdout:
+        stdout.length > maxLen
+          ? stdout.slice(0, maxLen) + "\n[truncated]"
+          : stdout,
+      stderr:
+        stderr.length > maxLen
+          ? stderr.slice(0, maxLen) + "\n[truncated]"
+          : stderr,
+      exit_code: exitCode,
+    };
+  },
+};
+```
+
+### src/tools/skill.ts
+
+```typescript
+import { readFileSync, readdirSync, existsSync } from "fs";
+import { join } from "path";
+import { homedir } from "os";
+
+interface SkillMeta {
+  name: string;
+  description: string;
+  path: string;
+}
+
+export function discoverSkills(projectPath: string): SkillMeta[] {
+  const skills: SkillMeta[] = [];
+  const dirs = [
+    { prefix: "", dir: join(import.meta.dir, "../skills/builtin") },
+    { prefix: "", dir: join(homedir(), ".openkrow/skills") },
+    { prefix: "project:", dir: join(projectPath, ".agent/skills") },
+  ];
+
+  for (const { prefix, dir } of dirs) {
+    if (!existsSync(dir)) continue;
+    for (const name of readdirSync(dir)) {
+      const skillFile = join(dir, name, "SKILL.md");
+      if (!existsSync(skillFile)) continue;
+      const content = readFileSync(skillFile, "utf-8");
+      const desc = content.split("\n")[0]?.replace(/^#\s*/, "") || name;
+      skills.push({
+        name: `${prefix}${name}`,
+        description: desc,
+        path: skillFile,
+      });
+    }
+  }
+  return skills;
+}
+
+export const skillTool = {
+  name: "load_skill",
+  description:
+    "Load specialized instructions for a specific domain or framework",
+  input_schema: {
+    type: "object",
+    properties: {
+      name: { type: "string", description: "Skill name to load" },
+    },
+    required: ["name"],
+  },
+  execute: async (args: Record<string, unknown>, projectPath: string) => {
+    const skills = discoverSkills(projectPath);
+    const skill = skills.find((s) => s.name === args.name);
+    if (!skill) {
+      return {
+        error: `skill "${args.name}" not found`,
+        available: skills.map((s) => ({
+          name: s.name,
+          description: s.description,
+        })),
+      };
+    }
+    return { name: skill.name, content: readFileSync(skill.path, "utf-8") };
+  },
+};
+```
+
+### src/prompts/system.ts
+
+```typescript
+import { readFileSync, existsSync } from "fs";
+import { join } from "path";
+import { discoverSkills } from "../tools/skill";
+
+export async function buildSystemPrompt(projectPath: string): Promise<string> {
+  let prompt = readFileSync(
+    join(import.meta.dir, "templates/base.md"),
+    "utf-8",
+  );
+
+  // Project-specific instructions
+  const projectInstructions = join(projectPath, ".agent/instructions.md");
+  if (existsSync(projectInstructions)) {
+    prompt += "\n\n## Project Instructions\n\n";
+    prompt += readFileSync(projectInstructions, "utf-8");
+  }
+
+  // Available skills
+  const skills = discoverSkills(projectPath);
+  if (skills.length) {
+    prompt += "\n\n## Available Skills\n\n";
+    prompt +=
+      "Use the `load_skill` tool to load detailed instructions when needed:\n\n";
+    prompt += skills.map((s) => `- **${s.name}**: ${s.description}`).join("\n");
+  }
+
+  return prompt;
+}
+```
+
+### src/llm/context.ts
+
+```typescript
+import type { Message } from "./providers/types";
+
+function estimateTokens(text: string): number {
+  return Math.ceil(text.length / 4);
+}
+
+export function trimContext(messages: Message[], maxTokens: number): Message[] {
+  const budget = maxTokens - 8192;
+  let used = 0;
+  const result: Message[] = [];
+
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const cost = estimateTokens(JSON.stringify(messages[i]));
+    if (used + cost > budget) break;
+    used += cost;
+    result.unshift(messages[i]);
+  }
+
+  return result;
+}
+```
+
+### src/db/index.ts
+
+```typescript
+import { Database } from "bun:sqlite";
+import { join } from "path";
+import { homedir } from "os";
+
+const DATA_DIR = process.env.DATA_DIR || join(homedir(), ".openkrow");
+const DB_PATH = join(DATA_DIR, "data.db");
+
+const db = new Database(DB_PATH);
+db.run("PRAGMA journal_mode = WAL");
+db.run("PRAGMA foreign_keys = ON");
+
+db.run(`CREATE TABLE IF NOT EXISTS session (
+  id              TEXT PRIMARY KEY,
+  project_path    TEXT NOT NULL,
+  title           TEXT,
+  created_at      INTEGER NOT NULL DEFAULT (unixepoch()),
+  updated_at      INTEGER NOT NULL DEFAULT (unixepoch())
+)`);
+
+db.run(`CREATE TABLE IF NOT EXISTS message (
+  id              TEXT PRIMARY KEY,
+  session_id      TEXT NOT NULL REFERENCES session(id) ON DELETE CASCADE,
+  role            TEXT NOT NULL,
+  content         TEXT NOT NULL,
+  tool_calls      TEXT,
+  token_usage     INTEGER,
+  created_at      INTEGER NOT NULL DEFAULT (unixepoch())
+)`);
+
+db.run(`CREATE TABLE IF NOT EXISTS project (
+  path            TEXT PRIMARY KEY,
+  name            TEXT,
+  instructions    TEXT,
+  last_opened     INTEGER NOT NULL DEFAULT (unixepoch())
+)`);
+
+db.run(`CREATE TABLE IF NOT EXISTS file_index (
+  path            TEXT NOT NULL,
+  project_path    TEXT NOT NULL,
+  hash            TEXT NOT NULL,
+  summary         TEXT,
+  embedding       BLOB,
+  updated_at      INTEGER NOT NULL DEFAULT (unixepoch()),
+  PRIMARY KEY (project_path, path)
+)`);
+
+export { db };
+```
+
+### src/config.ts
+
+```typescript
+import { watch } from "fs";
+import { join } from "path";
+import { homedir } from "os";
+
+const CONFIG_PATH = join(
+  process.env.DATA_DIR || join(homedir(), ".openkrow"),
+  "config.json",
+);
+
+const defaultConfig = {
+  provider: "anthropic" as string,
+  model: "claude-sonnet-4-20250514" as string,
+  api_keys: {} as Record<string, string>,
+  max_context_tokens: 128000,
+  theme: "dark" as string,
+};
+
+let currentConfig = { ...defaultConfig };
+
+export function loadConfig() {
+  try {
+    const file = Bun.file(CONFIG_PATH);
+    if (file.size) {
+      const loaded = JSON.parse(file.toString());
+      currentConfig = { ...defaultConfig, ...loaded };
+    }
+  } catch {}
+  return currentConfig;
+}
+
+// Initial load
+loadConfig();
+
+// Watch for config changes from Tauri/frontend
+watch(CONFIG_PATH, () => loadConfig());
+```
 
 ---
 
-## 10. Skill System Deep Dive
+## Build & Distribution
 
-### Skill Discovery & Installation
+### Build Pipeline
 
-```
-$ openkrow
-❯ /skills install google-docs
+```typescript
+// scripts/build.ts
 
-  Searching skill registry...
-  Found: google-docs v1.2.0 - Create and edit Google Docs
-  Installing to ~/.config/openkrow/skills/google-docs/
-  Done. 2 new tools available: create_doc, edit_doc
-```
+import { $ } from "bun";
 
-### Skill Lifecycle
+const target = process.argv[2] || "darwin-arm64";
 
-```
-                  ┌─────────────┐
-   install ──────▶│  Downloaded  │
-                  │  to skills/  │
-                  └──────┬──────┘
-                         │
-                    load SKILL.md
-                    parse tools
-                         │
-                  ┌──────▼──────┐
-                  │   Loaded    │  tools registered
-                  │   & Active  │  in ToolRegistry
-                  └──────┬──────┘
-                         │
-                  ┌──────▼──────┐
-                  │   Disabled  │  user can toggle
-                  └──────┬──────┘
-                         │
-                  ┌──────▼──────┐
-                  │ Uninstalled │  removed from disk
-                  └─────────────┘
+// 1. Build agent binary
+await $`bun build --compile --production --target=bun-${target} agent/index.ts --outfile src-tauri/resources/agent-bin`;
+await $`chmod +x src-tauri/resources/agent-bin`;
+
+// 2. Build frontend
+await $`bun run --cwd src vite build`;
+
+// 3. Build Tauri app
+await $`cargo tauri build`;
 ```
 
-### MCP Server Integration
+### Cross-Platform Targets
 
-For MCP servers, the Skill Manager:
-1. Spawns the server process (stdio) or connects via HTTP.
-2. Sends `initialize` to negotiate capabilities.
-3. Calls `tools/list` to discover available tools.
-4. Registers those tools in the ToolRegistry with a `skill:` prefix.
-5. When the agent calls a skill tool, the Skill Manager forwards the call to the MCP server.
-6. On shutdown, sends `shutdown` + `exit` to clean up.
+```typescript
+// scripts/build-all.ts
+
+import { $ } from "bun";
+
+const targets = [
+  { bun: "bun-darwin-arm64", tauri: "aarch64-apple-darwin" },
+  { bun: "bun-darwin-x64", tauri: "x86_64-apple-darwin" },
+  { bun: "bun-linux-x64", tauri: "x86_64-unknown-linux-gnu" },
+  { bun: "bun-windows-x64", tauri: "x86_64-pc-windows-msvc" },
+];
+
+for (const target of targets) {
+  console.log(`Building for ${target.tauri}...`);
+  await $`bun build --compile --production --target=${target.bun} agent/index.ts --outfile src-tauri/resources/agent-bin`;
+  await $`cargo tauri build --target ${target.tauri}`;
+}
+```
+
+### Final App Bundle
+
+```
+OpenKrow.app                    (~60MB total)
+└── Contents/
+    ├── MacOS/
+    │   └── openkrow            # Tauri binary    ~10MB
+    ├── Resources/
+    │   └── agent-bin           # Bun agent       ~50MB
+    └── _CodeSignature/         # macOS signing
+```
 
 ---
 
-## 11. Security Model
+## Performance Characteristics
 
-| Concern | Approach |
-|---------|----------|
-| API keys | Never persisted to config files. Always from env vars. |
-| File access | Agent has full autonomy -- no confirmation prompts. |
-| Bash execution | Full autonomy. Agent decides what to run. |
-| MCP servers | Sandboxed by OS process isolation. Skills declare required permissions. |
-| Personality data | Stored locally only. Never sent to any service except the LLM. |
-| `.krow/` | Added to `.gitignore` suggestions. Contains personal context. |
-
----
-
-## 12. Future Considerations
-
-These are explicitly **out of scope** for v0.1 but the architecture should not preclude them:
-
-- **Multi-agent orchestration:** One agent delegates subtasks to specialized agents.
-- **Web UI:** The `@openkrow/web-ui` package already exists and can be wired up later.
-- **Team workspaces:** Shared workspace context across a team.
-- **Persistent background agents:** Long-running agents that watch for events (file changes, CI results).
-- **GPU pod integration:** The `@openkrow/pods` package enables self-hosted model deployments.
+| Operation                         | Latency             | Bottleneck           |
+| --------------------------------- | ------------------- | -------------------- |
+| App startup to agent ready        | ~200ms              | Webview rendering    |
+| User sends message to first token | ~300-800ms          | LLM API network      |
+| Token streaming pipeline          | <0.2ms per token    | LLM generation speed |
+| Tool execution (file read)        | ~0.3ms              | Negligible           |
+| Tool execution (bash)             | ~5ms + command time | Command itself       |
+| HTTP localhost overhead           | ~1-2ms per request  | Negligible           |
+| Context trimming                  | ~1-5ms              | Message count        |
 
 ---
 
-## 13. Monorepo Package Map
+## Security
 
-```
-openkrow/
-├── packages/
-│   ├── ai/                  # LLM abstraction + model router
-│   ├── agent-core/          # Agent runtime, context mgr, workspace, skills, personality
-│   ├── tui/                 # Terminal UI components
-│   ├── web-ui/              # Web components (future)
-│   └── pods/                # GPU pod management (future)
-├── apps/
-│   ├── openkrow/            # Main CLI app (user entry point)
-│   ├── coding-agent/        # Legacy coding-only agent (to be merged into openkrow)
-│   └── mom/                 # Slack bot integration
-├── docs/
-│   └── system-design.md     # This document
-└── examples/
-    └── tui-demo.ts          # TUI component demo
-```
+- Agent server binds to `127.0.0.1` only (not accessible from network)
+- Bearer token auth on all endpoints (random UUID per app launch)
+- File operations restricted to project directory (path traversal check)
+- Bash execution scoped to project working directory
+- API keys stored in `~/.openkrow/config.json` (user-readable only)
+- No secrets embedded in the binary
