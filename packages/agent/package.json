@@ -18,6 +18,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@openkrow/ai": "*",
     "eventemitter3": "^5.0.1"
   },
   "devDependencies": {

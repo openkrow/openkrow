@@ -14,6 +14,7 @@ export type {
   AgentConfig,
   AgentEvents,
   Tool,
+  ToolDefinition,
   ToolResult,
   Message,
 } from "./types/index.js";
