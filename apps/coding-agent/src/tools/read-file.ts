@@ -1,6 +1,6 @@
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
-import type { Tool } from "@openkrow/agent-core";
+import type { Tool } from "@openkrow/agent";
 
 export const readFileTool: Tool = {
   definition: {

@@ -1,5 +1,5 @@
 {
-  "name": "@openkrow/agent-core",
+  "name": "@openkrow/agent",
   "version": "0.1.0",
   "description": "Agent runtime with tool calling and state management",
   "type": "module",

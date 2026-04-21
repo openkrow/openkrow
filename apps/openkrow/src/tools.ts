@@ -3,7 +3,7 @@ import * as path from "node:path";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { glob } from "glob";
-import { Agent, type Tool, type ToolResult } from "@openkrow/agent-core";
+import { Agent, type Tool, type ToolResult } from "@openkrow/agent";
 
 const execFileAsync = promisify(execFile);
 

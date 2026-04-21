@@ -14,7 +14,7 @@
   },
   "dependencies": {
     "@openkrow/ai": "*",
-    "@openkrow/agent-core": "*",
+    "@openkrow/agent": "*",
     "@slack/bolt": "^4.2.0"
   },
   "devDependencies": {

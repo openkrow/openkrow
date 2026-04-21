@@ -1,4 +1,4 @@
-import { Agent } from "@openkrow/agent-core";
+import { Agent } from "@openkrow/agent";
 import type { LLMConfig } from "@openkrow/ai";
 import { createDefaultTools } from "./tools/index.js";
 

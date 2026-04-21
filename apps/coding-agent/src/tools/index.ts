@@ -1,4 +1,4 @@
-import type { Tool } from "@openkrow/agent-core";
+import type { Tool } from "@openkrow/agent";
 import { readFileTool } from "./read-file.js";
 import { writeFileTool } from "./write-file.js";
 import { bashTool } from "./bash.js";

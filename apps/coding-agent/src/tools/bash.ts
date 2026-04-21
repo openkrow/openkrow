@@ -1,6 +1,6 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import type { Tool } from "@openkrow/agent-core";
+import type { Tool } from "@openkrow/agent";
 
 const execFileAsync = promisify(execFile);
 

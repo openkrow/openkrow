@@ -1,5 +1,5 @@
 import { glob } from "glob";
-import type { Tool } from "@openkrow/agent-core";
+import type { Tool } from "@openkrow/agent";
 
 export const listFilesTool: Tool = {
   definition: {

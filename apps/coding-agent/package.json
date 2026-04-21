@@ -24,7 +24,7 @@
   },
   "dependencies": {
     "@openkrow/ai": "*",
-    "@openkrow/agent-core": "*",
+    "@openkrow/agent": "*",
     "@openkrow/tui": "*",
     "commander": "^13.1.0",
     "glob": "^11.0.1"
