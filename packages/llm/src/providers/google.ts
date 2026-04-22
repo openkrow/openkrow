@@ -13,7 +13,7 @@ import type {
   Usage,
 } from "../types.js";
 import { EventStream } from "../utils/event-stream.js";
-import { resolveApiKey } from "../env-api-keys.js";
+import { resolveCredentials } from "../resolve-credentials.js";
 
 const GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models";
 
@@ -93,12 +93,6 @@ export function streamGoogle(
 ): EventStream {
   const stream = new EventStream();
 
-  const apiKey = options?.apiKey ?? resolveApiKey("google");
-  if (!apiKey) {
-    stream.error(new Error("Google API key not found. Set GEMINI_API_KEY or GOOGLE_API_KEY."));
-    return stream;
-  }
-
   const { systemInstruction, contents } = convertMessages(context);
 
   const body: Record<string, unknown> = {
@@ -114,15 +108,22 @@ export function streamGoogle(
   const tools = convertTools(context.tools);
   if (tools) body.tools = tools;
 
-  const url = `${GEMINI_API_URL}/${model.id}:streamGenerateContent?key=${apiKey}&alt=sse`;
-
   // Start streaming in background
   (async () => {
     try {
+      const resolved = await resolveCredentials(model.provider, options);
+      if (!resolved) {
+        stream.error(new Error("Google API key not found. Pass apiKey or oauthCredentials in options."));
+        return;
+      }
+
+      const url = `${GEMINI_API_URL}/${model.id}:streamGenerateContent?key=${resolved.apiKey}&alt=sse`;
+
       const response = await fetch(url, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          ...resolved.extraHeaders,
           ...options?.headers,
         },
         body: JSON.stringify(body),

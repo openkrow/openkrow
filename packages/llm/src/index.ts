@@ -34,8 +34,12 @@ export {
   calculateCost,
 } from "./models.js";
 
-// --- Env API Keys ---
+// --- Env API Keys (optional fallback — prefer passing apiKey or oauthCredentials) ---
 export { resolveApiKey } from "./env-api-keys.js";
+
+// --- Credential Resolution ---
+export { resolveCredentials } from "./resolve-credentials.js";
+export type { ResolvedCredentials } from "./resolve-credentials.js";
 
 // --- Event Stream ---
 export { EventStream } from "./utils/event-stream.js";
@@ -93,6 +97,7 @@ export type {
   // Context & Options
   Context,
   StreamOptions,
+  OAuthCredentialsInput,
   ToolDefinition,
 
   // Events

@@ -140,8 +140,10 @@ export interface Context {
 // ---------------------------------------------------------------------------
 
 export interface StreamOptions {
-  /** API key override */
+  /** API key (takes precedence over OAuth and env vars) */
   apiKey?: string;
+  /** OAuth credentials — if provided and no apiKey, will auto-refresh and extract API key */
+  oauthCredentials?: OAuthCredentialsInput;
   /** Temperature (0-2) */
   temperature?: number;
   /** Maximum output tokens */
@@ -150,6 +152,33 @@ export interface StreamOptions {
   signal?: AbortSignal;
   /** Custom headers */
   headers?: Record<string, string>;
+  /**
+   * Whether to fall back to environment variables if no apiKey or oauthCredentials provided.
+   * Defaults to true for backward compatibility but desktop apps should set this to false.
+   */
+  envFallback?: boolean;
+}
+
+/**
+ * OAuth credentials passed as input to stream(). The LLM package will
+ * auto-refresh expired tokens and call onRefresh so the caller can persist them.
+ */
+export interface OAuthCredentialsInput {
+  /** The OAuth provider ID (e.g. "github-copilot", "anthropic") */
+  providerId: string;
+  /** Current refresh token */
+  refresh: string;
+  /** Current access token */
+  access: string;
+  /** Expiry timestamp in milliseconds */
+  expires: number;
+  /** Provider-specific extra fields (e.g. enterpriseUrl for Copilot) */
+  extra?: Record<string, unknown>;
+  /**
+   * Called when tokens are refreshed so the caller can persist the updated credentials.
+   * If not provided, refreshed tokens are used for this request only.
+   */
+  onRefresh?: (updated: { refresh: string; access: string; expires: number; extra?: Record<string, unknown> }) => void;
 }
 
 // ---------------------------------------------------------------------------
