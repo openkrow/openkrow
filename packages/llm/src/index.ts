@@ -40,6 +40,29 @@ export { resolveApiKey } from "./env-api-keys.js";
 // --- Event Stream ---
 export { EventStream } from "./utils/event-stream.js";
 
+// --- OAuth ---
+export {
+  registerOAuthProvider,
+  getOAuthProvider,
+  getOAuthProviderIds,
+  getOAuthApiKey,
+  isExpired,
+  loginGitHubCopilot,
+  refreshGitHubCopilotToken,
+  buildCopilotHeaders,
+  getGitHubCopilotBaseUrl,
+  loginAnthropic,
+  refreshAnthropicToken,
+} from "./utils/oauth/index.js";
+
+export type {
+  OAuthCredentials,
+  OAuthAuthInfo,
+  OAuthPrompt,
+  OAuthLoginCallbacks,
+  OAuthProviderInterface,
+} from "./utils/oauth/index.js";
+
 // --- Provider registration (auto-registers on import) ---
 export { registerBuiltInApiProviders } from "./providers/register-builtins.js";
 

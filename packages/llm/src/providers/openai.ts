@@ -14,6 +14,7 @@ import type {
 } from "../types.js";
 import { EventStream } from "../utils/event-stream.js";
 import { resolveApiKey } from "../env-api-keys.js";
+import { buildCopilotHeaders } from "../utils/oauth/github-copilot.js";
 
 const OPENAI_API_URL = "https://api.openai.com/v1/chat/completions";
 
@@ -168,13 +169,23 @@ export function streamOpenAICompletions(
   // Start streaming in background
   (async () => {
     try {
+    // Build headers — inject Copilot-specific headers when needed
+      const requestHeaders: Record<string, string> = {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
+      };
+
+      if (model.provider === "github-copilot") {
+        Object.assign(requestHeaders, buildCopilotHeaders(messages));
+      }
+
+      if (options?.headers) {
+        Object.assign(requestHeaders, options.headers);
+      }
+
       const response = await fetch(baseUrl, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${apiKey}`,
-          ...options?.headers,
-        },
+        headers: requestHeaders,
         body: JSON.stringify(body),
         signal: options?.signal,
       });

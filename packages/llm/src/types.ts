@@ -21,6 +21,7 @@ export type KnownProvider =
   | "openai"
   | "anthropic"
   | "google"
+  | "github-copilot"
   | "xai"
   | "groq"
   | "deepseek"

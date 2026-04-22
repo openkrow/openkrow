@@ -162,6 +162,71 @@ const models: Model[] = [
     outputCostPerMillion: 0.79,
   },
 
+  // ---- GitHub Copilot ----
+  // Accessed via OpenAI-compatible Copilot proxy. baseUrl is set dynamically
+  // from the Copilot token's proxy-ep field (see oauth/github-copilot.ts).
+  // Cost is $0 — included in GitHub Copilot subscription.
+  {
+    id: "claude-sonnet-4-20250514",
+    name: "Claude Sonnet 4 (Copilot)",
+    api: "openai-completions",
+    provider: "github-copilot",
+    contextWindow: 200000,
+    maxTokens: 16000,
+    supportsTools: true,
+    supportsThinking: false,
+  },
+  {
+    id: "claude-3.5-sonnet",
+    name: "Claude 3.5 Sonnet (Copilot)",
+    api: "openai-completions",
+    provider: "github-copilot",
+    contextWindow: 200000,
+    maxTokens: 8192,
+    supportsTools: true,
+    supportsThinking: false,
+  },
+  {
+    id: "gpt-4o",
+    name: "GPT-4o (Copilot)",
+    api: "openai-completions",
+    provider: "github-copilot",
+    contextWindow: 128000,
+    maxTokens: 16384,
+    supportsTools: true,
+    supportsThinking: false,
+  },
+  {
+    id: "gpt-4o-mini",
+    name: "GPT-4o Mini (Copilot)",
+    api: "openai-completions",
+    provider: "github-copilot",
+    contextWindow: 128000,
+    maxTokens: 16384,
+    supportsTools: true,
+    supportsThinking: false,
+  },
+  {
+    id: "o3-mini",
+    name: "o3 Mini (Copilot)",
+    api: "openai-completions",
+    provider: "github-copilot",
+    contextWindow: 200000,
+    maxTokens: 100000,
+    supportsTools: true,
+    supportsThinking: true,
+  },
+  {
+    id: "gemini-2.0-flash",
+    name: "Gemini 2.0 Flash (Copilot)",
+    api: "openai-completions",
+    provider: "github-copilot",
+    contextWindow: 1048576,
+    maxTokens: 8192,
+    supportsTools: true,
+    supportsThinking: false,
+  },
+
   // ---- DeepSeek ----
   {
     id: "deepseek-chat",

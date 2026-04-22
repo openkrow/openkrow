@@ -12,6 +12,7 @@ const ENV_API_KEY_MAP: EnvApiKeyMap[] = [
   { provider: "groq", envVars: ["GROQ_API_KEY"] },
   { provider: "deepseek", envVars: ["DEEPSEEK_API_KEY"] },
   { provider: "openrouter", envVars: ["OPENROUTER_API_KEY"] },
+  { provider: "github-copilot", envVars: ["GITHUB_COPILOT_TOKEN"] },
 ];
 
 /**
