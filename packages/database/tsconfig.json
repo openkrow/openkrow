@@ -1,0 +1,16 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "outDir": "dist",
+    "rootDir": ".",
+    "types": ["bun-types"]
+  },
+  "include": [
+    "index.ts",
+    "connection",
+    "schema",
+    "repositories",
+    "migrations",
+    "types"
+  ]
+}

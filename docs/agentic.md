@@ -5,7 +5,6 @@ OpenKrow is an agents AI agent that can help you complete all kinds of tasks. It
 
 ## Query Loop
 
-
 ## Tools Orchestration & Skills & MCP
 
 ## Multi-agent

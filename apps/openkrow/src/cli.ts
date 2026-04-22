@@ -12,6 +12,7 @@ import { VERSION } from "./version.js";
 import { chatCommand } from "./commands/chat.js";
 import { runCommand } from "./commands/run.js";
 import { configCommand } from "./commands/config.js";
+import { serverCommand } from "./commands/server.js";
 
 const program = new Command();
 
@@ -40,6 +41,15 @@ program
   .option("-p, --provider <provider>", "LLM provider")
   .option("--no-tools", "Disable tool calling")
   .action(runCommand);
+
+program
+  .command("server")
+  .description("Start the OpenKrow HTTP server for API access")
+  .option("--port <port>", "Port to listen on", "3000")
+  .option("--host <host>", "Host to bind to", "localhost")
+  .option("-m, --model <model>", "LLM model to use")
+  .option("-p, --provider <provider>", "LLM provider (openai | anthropic | google)")
+  .action(serverCommand);
 
 program
   .command("config")
