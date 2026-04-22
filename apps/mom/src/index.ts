@@ -7,7 +7,7 @@
 
 import App from "@slack/bolt";
 import { Agent } from "@openkrow/agent";
-import type { LLMConfig } from "@openkrow/ai";
+import type { LLMConfig } from "@openkrow/llm";
 
 const SYSTEM_PROMPT = `You are OpenKrow, a helpful coding assistant available via Slack.
 You help developers with code reviews, debugging, and answering programming questions.

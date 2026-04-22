@@ -20,7 +20,7 @@ import {
   type Conversation,
 } from "@openkrow/database";
 import { Agent } from "@openkrow/agent";
-import type { LLMConfig } from "@openkrow/ai";
+import type { LLMConfig } from "@openkrow/llm";
 
 export interface OrchestratorConfig {
   /** Database configuration */

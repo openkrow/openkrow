@@ -1,7 +1,7 @@
 {
-  "name": "@openkrow/ai",
+  "name": "@openkrow/llm",
   "version": "0.1.0",
-  "description": "Unified multi-provider LLM API (OpenAI, Anthropic, Google, etc.)",
+  "description": "Unified multi-provider LLM API for agent interactions (OpenAI, Anthropic, Google, etc.)",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",

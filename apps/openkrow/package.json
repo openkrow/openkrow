@@ -24,7 +24,7 @@
     "test": "node --test dist/__tests__/*.test.js"
   },
   "dependencies": {
-    "@openkrow/ai": "*",
+    "@openkrow/llm": "*",
     "@openkrow/agent": "*",
     "@openkrow/database": "*",
     "@openkrow/tui": "*",

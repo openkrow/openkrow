@@ -18,7 +18,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@openkrow/ai": "*",
+    "@openkrow/llm": "*",
     "eventemitter3": "^5.0.1"
   },
   "devDependencies": {

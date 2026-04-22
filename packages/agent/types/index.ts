@@ -2,7 +2,7 @@
  * @openkrow/agent — Type definitions
  */
 
-import type { LLMConfig } from "@openkrow/ai";
+import type { LLMConfig } from "@openkrow/llm";
 
 // ---------------------------------------------------------------------------
 // Agent Configuration

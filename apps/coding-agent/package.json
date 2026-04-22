@@ -23,7 +23,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@openkrow/ai": "*",
+    "@openkrow/llm": "*",
     "@openkrow/agent": "*",
     "@openkrow/tui": "*",
     "commander": "^13.1.0",
