@@ -1,5 +1,5 @@
 /**
- * @openkrow/ai - Unified multi-provider LLM API
+ * @openkrow/llm - Unified multi-provider LLM API
  *
  * Provides a single interface to interact with multiple LLM providers
  * including OpenAI, Anthropic, and Google. Includes smart model routing

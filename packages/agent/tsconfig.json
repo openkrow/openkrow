@@ -6,7 +6,6 @@
   },
   "include": [
     "index.ts",
-    "agent",
     "context",
     "personality",
     "skills",

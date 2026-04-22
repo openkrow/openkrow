@@ -1,5 +1,5 @@
 import { Agent } from "@openkrow/agent";
-import type { LLMConfig } from "@openkrow/ai";
+import type { LLMConfig } from "@openkrow/llm";
 import { createDefaultTools } from "./tools/index.js";
 
 const DEFAULT_SYSTEM_PROMPT = `You are OpenKrow, an expert coding assistant running in the user's terminal.
