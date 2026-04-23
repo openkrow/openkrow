@@ -36,6 +36,8 @@ import {
   estimateToolDefinitionTokens,
 } from "./tokens.js";
 
+import { assembleSystemPrompt, type PromptAssemblyOptions } from "./prompt.js";
+
 // ---------------------------------------------------------------------------
 // Defaults
 // ---------------------------------------------------------------------------
@@ -55,16 +57,33 @@ const COLLAPSE_MIN_BLOCK_SIZE = 3;
 
 export class ContextManager {
   private messages: Message[] = [];
-  private systemPrompt: string = "";
+  private promptOptions: PromptAssemblyOptions = {};
+  private customPromptOverride: string | undefined;
 
-  // ---- Basic state management ----
+  // ---- Prompt management ----
 
-  setSystemPrompt(prompt: string): void {
-    this.systemPrompt = prompt;
+  /**
+   * Configure prompt assembly options. The system prompt is built internally
+   * from prompt templates based on provider, tools, and user context.
+   */
+  configurePrompt(options: PromptAssemblyOptions): void {
+    this.promptOptions = { ...this.promptOptions, ...options };
   }
 
+  /**
+   * Override the assembled prompt with a fully custom system prompt.
+   * When set, the prompt assembly pipeline is bypassed entirely.
+   */
+  setCustomPrompt(prompt: string | undefined): void {
+    this.customPromptOverride = prompt;
+  }
+
+  /**
+   * Get the current system prompt (assembled or custom override).
+   */
   getSystemPrompt(): string {
-    return this.systemPrompt;
+    if (this.customPromptOverride !== undefined) return this.customPromptOverride;
+    return assembleSystemPrompt(this.promptOptions);
   }
 
   addMessage(message: Omit<Message, "timestamp"> & { timestamp?: number }): Message {
@@ -91,13 +110,18 @@ export class ContextManager {
     const {
       contextWindow,
       maxOutputTokens,
-      systemPrompt,
       tools = [],
       reservedBuffer = DEFAULT_RESERVED_BUFFER,
       toolResultBudget = DEFAULT_TOOL_RESULT_BUDGET,
     } = options;
 
-    // Effective budget = contextWindow - maxOutput - buffer - systemPrompt - tools
+    // Update prompt options with tool awareness
+    if (tools.length > 0) {
+      this.promptOptions.hasTools = true;
+    }
+
+    // System prompt is assembled internally
+    const systemPrompt = this.getSystemPrompt();
     const systemTokens = systemPrompt ? estimateTokens(systemPrompt) : 0;
     const toolTokens = estimateToolDefinitionTokens(tools);
     const effectiveBudget = contextWindow - maxOutputTokens - reservedBuffer - systemTokens - toolTokens;

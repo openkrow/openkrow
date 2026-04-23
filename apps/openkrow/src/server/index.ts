@@ -18,20 +18,6 @@ import {
 } from "./types.js";
 import { VERSION } from "../version.js";
 
-const SYSTEM_PROMPT = `You are OpenKrow, an expert AI coding assistant running in the user's terminal.
-
-You have access to tools for reading files, writing files, executing shell commands,
-searching codebases, and listing directory contents.
-
-Principles:
-- Be concise and direct. Terminal space is limited.
-- Explain your reasoning before taking actions.
-- When editing code, describe the change, then apply it.
-- Ask for clarification when the request is ambiguous.
-- Respect the existing codebase style and conventions.
-- Never execute destructive commands without explicit user confirmation.
-- When showing code, use the minimal diff needed -- don't reprint entire files.`;
-
 export interface OpenKrowServerOptions {
   config?: Partial<ServerConfig>;
   workspacePath?: string;
@@ -56,7 +42,6 @@ export class OpenKrowServer {
 
     // Initialize orchestrator
     this.orchestrator = Orchestrator.create({
-      systemPrompt: SYSTEM_PROMPT,
       llm: {
         provider: options.provider ?? "anthropic",
         model: options.model ?? "claude-sonnet-4-20250514",

@@ -36,7 +36,6 @@ function tokString(tokens: number): string {
 const defaultOptions: ContextAssemblyOptions = {
   contextWindow: 100_000,
   maxOutputTokens: 4_000,
-  systemPrompt: "You are a helpful assistant.",
   reservedBuffer: 20_000,
   toolResultBudget: 10_000,
 };
@@ -53,8 +52,8 @@ describe("ContextManager", () => {
   });
 
   describe("basic state management", () => {
-    it("should store and retrieve system prompt", () => {
-      cm.setSystemPrompt("Hello");
+    it("should store and retrieve system prompt via custom override", () => {
+      cm.setCustomPrompt("Hello");
       assert.equal(cm.getSystemPrompt(), "Hello");
     });
 
@@ -91,9 +90,10 @@ describe("ContextManager", () => {
     });
 
     it("should include system prompt in result", () => {
+      cm.setCustomPrompt("Test prompt");
       cm.addMessage(makeUserMsg("Hello"));
       const result = cm.contextAssembly(defaultOptions);
-      assert.equal(result.systemPrompt, defaultOptions.systemPrompt);
+      assert.equal(result.systemPrompt, "Test prompt");
     });
   });
 

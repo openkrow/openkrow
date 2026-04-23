@@ -9,8 +9,8 @@ import App from "@slack/bolt";
 import { Agent } from "@openkrow/agent";
 import type { LLMConfig } from "@openkrow/llm";
 
-const SYSTEM_PROMPT = `You are OpenKrow, a helpful coding assistant available via Slack.
-You help developers with code reviews, debugging, and answering programming questions.
+const SYSTEM_PROMPT = `You are OpenKrow, a helpful assistant available via Slack.
+You help with documents, presentations, scheduling, and general office tasks.
 Keep responses concise and formatted for Slack (use code blocks with backticks).`;
 
 function createAgent(): Agent {
@@ -23,8 +23,8 @@ function createAgent(): Agent {
 
   return new Agent({
     name: "openkrow-slack",
-    description: "Slack coding assistant",
-    systemPrompt: SYSTEM_PROMPT,
+    description: "Slack assistant",
+    customPrompt: SYSTEM_PROMPT,
     llm: llmConfig,
     maxTurns: 5,
   });

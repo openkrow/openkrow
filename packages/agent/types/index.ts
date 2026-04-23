@@ -6,6 +6,7 @@ import type {
   LLMConfig,
   ContentPart,
   ToolCallContent,
+  KnownProvider,
 } from "@openkrow/llm";
 import type { DatabaseClient } from "@openkrow/database";
 
@@ -18,7 +19,14 @@ export type { DatabaseClient } from "@openkrow/database";
 export interface AgentConfig {
   name: string;
   description?: string;
-  systemPrompt?: string;
+  /**
+   * Custom system prompt override. When set, bypasses the built-in prompt
+   * assembly pipeline entirely. Use this only for specialized agents that
+   * need a completely custom prompt.
+   */
+  customPrompt?: string;
+  /** User's name, injected into the assembled prompt */
+  userName?: string;
   llm?: LLMConfig;
   /** Database client for persistence. When provided, the agent persists messages automatically. */
   database?: DatabaseClient;
@@ -140,8 +148,6 @@ export interface ContextAssemblyOptions {
   contextWindow: number;
   /** Maximum output tokens reserved for the response */
   maxOutputTokens: number;
-  /** System prompt */
-  systemPrompt?: string;
   /** Available tools (their definitions contribute to token budget) */
   tools?: ToolDefinition[];
   /**

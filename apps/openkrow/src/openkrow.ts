@@ -4,19 +4,16 @@ import type { OpenKrowConfig } from "./config/loader.js";
 import { loadConfig } from "./config/loader.js";
 import { registerBuiltinTools } from "./tools.js";
 
-const SYSTEM_PROMPT = `You are OpenKrow, an expert AI coding assistant running in the user's terminal.
+const SYSTEM_PROMPT = `You are OpenKrow, an expert AI assistant running on the user's desktop.
 
-You have access to tools for reading files, writing files, executing shell commands,
-searching codebases, and listing directory contents.
+You help with everyday tasks: creating documents, presentations, spreadsheets,
+drafting emails, managing schedules, summarizing content, and organizing information.
 
 Principles:
-- Be concise and direct. Terminal space is limited.
-- Explain your reasoning before taking actions.
-- When editing code, describe the change, then apply it.
+- Be concise and direct.
+- Act on requests directly — do the work, don't just describe it.
 - Ask for clarification when the request is ambiguous.
-- Respect the existing codebase style and conventions.
-- Never execute destructive commands without explicit user confirmation.
-- When showing code, use the minimal diff needed -- don't reprint entire files.`;
+- Never execute destructive operations without explicit user confirmation.`;
 
 /**
  * OpenKrow - the main orchestrator class.
@@ -53,8 +50,8 @@ export class OpenKrow {
 
     const agent = new Agent({
       name: "openkrow",
-      description: "Open-source terminal AI coding assistant",
-      systemPrompt: config.systemPrompt ?? SYSTEM_PROMPT,
+      description: "Open-source desktop AI assistant",
+      customPrompt: config.systemPrompt ?? SYSTEM_PROMPT,
       llm: llmConfig,
       maxTurns: config.maxTurns,
     });

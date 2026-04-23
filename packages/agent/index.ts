@@ -28,8 +28,14 @@ export class Agent extends EventEmitter<AgentEvents> {
     this.tools = new ToolRegistry();
     this.context = new ContextManager();
 
-    if (config.systemPrompt) {
-      this.context.setSystemPrompt(config.systemPrompt);
+    // Configure prompt assembly — the ContextManager owns the system prompt
+    if (config.customPrompt) {
+      this.context.setCustomPrompt(config.customPrompt);
+    } else {
+      this.context.configurePrompt({
+        provider: config.llm?.provider,
+        userName: config.userName,
+      });
     }
   }
 
@@ -141,6 +147,10 @@ export type {
 
 // Re-export token utilities
 export { estimateTokens, estimateMessageTokens, estimateTotalTokens } from "./context/index.js";
+
+// Re-export prompt assembly
+export { assembleSystemPrompt } from "./context/prompt.js";
+export type { PromptAssemblyOptions } from "./context/prompt.js";
 
 export type { UserPersonality } from "./personality/index.js";
 export type { WorkspaceContext } from "./workspace/index.js";

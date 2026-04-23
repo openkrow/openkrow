@@ -9,11 +9,7 @@
 
 import {
   createDatabaseClient,
-  type UserRepository,
-  type SessionRepository,
-  type ConversationRepository,
-  type MessageRepository,
-  type SettingsRepository,
+  type DatabaseClient,
   type DatabaseConfig,
   type User,
   type Session,
@@ -27,20 +23,12 @@ export interface OrchestratorConfig {
   database?: DatabaseConfig;
   /** Default LLM configuration for agents */
   llm: LLMConfig;
-  /** System prompt for agents */
-  systemPrompt: string;
+  /** System prompt override for agents (optional — uses built-in prompt by default) */
+  systemPrompt?: string;
   /** Maximum turns per agent run */
   maxTurns?: number;
   /** Enable tools */
   enableTools?: boolean;
-}
-
-interface DatabaseClient {
-  users: UserRepository;
-  sessions: SessionRepository;
-  conversations: ConversationRepository;
-  messages: MessageRepository;
-  settings: SettingsRepository;
 }
 
 /**
@@ -55,6 +43,11 @@ export class Orchestrator {
   private constructor(db: DatabaseClient, config: OrchestratorConfig) {
     this.db = db;
     this.config = config;
+  }
+
+  /** Get the database client (for direct access by the app) */
+  get database(): DatabaseClient {
+    return this.db;
   }
 
   /**
@@ -146,28 +139,33 @@ export class Orchestrator {
   }
 
   /**
-   * Get an agent for a session, creating one if needed
+   * Get an agent for a session + conversation, creating one if needed.
+   * The agent gets the database client so it handles message persistence.
    */
-  getAgent(sessionId: string): Agent {
-    let agent = this.agents.get(sessionId);
+  getAgent(sessionId: string, conversationId: string): Agent {
+    const key = `${sessionId}:${conversationId}`;
+    let agent = this.agents.get(key);
 
     if (!agent) {
       agent = new Agent({
         name: `openkrow-${sessionId}`,
-        description: "OpenKrow coding assistant",
-        systemPrompt: this.config.systemPrompt,
+        description: "OpenKrow AI assistant",
+        customPrompt: this.config.systemPrompt,
         llm: this.config.llm,
+        database: this.db,
+        conversationId,
         maxTurns: this.config.maxTurns,
       });
 
-      this.agents.set(sessionId, agent);
+      this.agents.set(key, agent);
     }
 
     return agent;
   }
 
   /**
-   * Send a message and get a response
+   * Send a message and get a response.
+   * The agent persists messages to the database automatically.
    */
   async chat(
     conversationId: string,
@@ -178,42 +176,30 @@ export class Orchestrator {
       throw new Error(`Conversation not found: ${conversationId}`);
     }
 
-    // Store the user message
-    const userMessage = this.db.messages.create({
-      conversation_id: conversationId,
-      role: "user",
-      content: message,
-    });
-
-    // Get the session's agent
     const session = this.getSession(conversation.session_id);
     if (!session) {
       throw new Error(`Session not found: ${conversation.session_id}`);
     }
 
-    const agent = this.getAgent(session.id);
-
-    // Run the agent
+    const agent = this.getAgent(session.id, conversationId);
     const response = await agent.run(message);
 
-    // Store the assistant message
-    const assistantMessage = this.db.messages.create({
-      conversation_id: conversationId,
-      role: "assistant",
-      content: response,
-    });
+    // Get the last assistant message from the database (persisted by the agent)
+    const messages = this.db.messages.getLastMessages(conversationId, 1);
+    const lastMessage = messages[messages.length - 1];
 
     // Update conversation timestamp
     this.db.conversations.update(conversationId, {});
 
     return {
       response,
-      messageId: assistantMessage.id,
+      messageId: lastMessage?.id ?? "",
     };
   }
 
   /**
-   * Stream a chat response
+   * Stream a chat response.
+   * The agent persists messages to the database automatically.
    */
   async *streamChat(
     conversationId: string,
@@ -224,41 +210,25 @@ export class Orchestrator {
       throw new Error(`Conversation not found: ${conversationId}`);
     }
 
-    // Store the user message
-    this.db.messages.create({
-      conversation_id: conversationId,
-      role: "user",
-      content: message,
-    });
-
-    // Get the session's agent
     const session = this.getSession(conversation.session_id);
     if (!session) {
       throw new Error(`Session not found: ${conversation.session_id}`);
     }
 
-    const agent = this.getAgent(session.id);
+    const agent = this.getAgent(session.id, conversationId);
 
-    // Collect full response for storage
-    let fullResponse = "";
-
-    // Stream the response
     for await (const chunk of agent.stream(message)) {
-      fullResponse += chunk;
       yield chunk;
     }
 
-    // Store the complete assistant message
-    const assistantMessage = this.db.messages.create({
-      conversation_id: conversationId,
-      role: "assistant",
-      content: fullResponse,
-    });
+    // Get the last assistant message from the database (persisted by the agent)
+    const messages = this.db.messages.getLastMessages(conversationId, 1);
+    const lastMessage = messages[messages.length - 1];
 
     // Update conversation timestamp
     this.db.conversations.update(conversationId, {});
 
-    return { messageId: assistantMessage.id };
+    return { messageId: lastMessage?.id ?? "" };
   }
 
   /**
