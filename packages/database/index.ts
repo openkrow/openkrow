@@ -4,7 +4,7 @@
  * Uses Bun SQLite to store user data in ~/.openkrow/database
  */
 
-import type { DatabaseConfig } from "./types/index.js";
+import type { DatabaseConfig, DatabaseClient } from "./types/index.js";
 import { initializeDatabase as initDb } from "./connection/index.js";
 import { runMigrations as migrate } from "./migrations/index.js";
 import {
@@ -25,7 +25,7 @@ export {
   transaction,
 } from "./connection/index.js";
 
-export type { DatabaseConfig } from "./types/index.js";
+export type { DatabaseConfig, DatabaseClient } from "./types/index.js";
 
 // Schema
 export { SCHEMA, getTableNames, getTableSchema } from "./schema/index.js";
@@ -47,15 +47,6 @@ export {
   SettingsRepository,
 } from "./repositories/index.js";
 
-export type {
-  CreateUserInput,
-  UpdateUserInput,
-  CreateSessionInput,
-  CreateConversationInput,
-  UpdateConversationInput,
-  CreateMessageInput,
-} from "./repositories/index.js";
-
 // Types
 export type {
   User,
@@ -64,6 +55,19 @@ export type {
   Message,
   Setting,
   Migration,
+  // Repository interfaces
+  IUserRepository,
+  ISessionRepository,
+  IConversationRepository,
+  IMessageRepository,
+  ISettingsRepository,
+  // Input types
+  CreateUserInput,
+  UpdateUserInput,
+  CreateSessionInput,
+  CreateConversationInput,
+  UpdateConversationInput,
+  CreateMessageInput,
 } from "./types/index.js";
 
 /**
@@ -78,7 +82,7 @@ export function setupDatabase(config?: DatabaseConfig): void {
 /**
  * Create a database instance with all repositories
  */
-export function createDatabaseClient(config?: DatabaseConfig) {
+export function createDatabaseClient(config?: DatabaseConfig): DatabaseClient {
   initDb(config);
   migrate();
 
