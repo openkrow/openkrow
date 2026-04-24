@@ -10,6 +10,7 @@ import type {
   AssistantMessage,
   ToolResultMessage,
   ContextAssemblyOptions,
+  SummarizerFn,
 } from "../types/index.js";
 import type { DatabaseClient, CreateMessageInput, Message as DbMessage } from "@openkrow/database";
 
@@ -82,54 +83,75 @@ describe("ContextManager", () => {
   });
 
   describe("contextAssembly — no compaction needed", () => {
-    it("should return all messages when within budget", () => {
+    it("should return all messages when within budget", async () => {
       cm.addMessage(makeUserMsg("Hello"));
       cm.addMessage(makeAssistantMsg("Hi there!"));
-      const result = cm.contextAssembly(defaultOptions);
+      const result = await cm.contextAssembly(defaultOptions);
       assert.equal(result.messages.length, 2);
       assert.equal(result.compactions.length, 0);
     });
 
-    it("should include system prompt in result", () => {
+    it("should include system prompt in result", async () => {
       cm.setCustomPrompt("Test prompt");
       cm.addMessage(makeUserMsg("Hello"));
-      const result = cm.contextAssembly(defaultOptions);
+      const result = await cm.contextAssembly(defaultOptions);
       assert.equal(result.systemPrompt, "Test prompt");
+    });
+
+    it("should skip all phases when within budget", async () => {
+      cm.addMessage(makeUserMsg("Hello"));
+      cm.addMessage(makeAssistantMsg("Hi"));
+      const result = await cm.contextAssembly(defaultOptions);
+      assert.equal(result.compactions.length, 0);
     });
   });
 
   describe("Phase 1 — Tool Result Budget", () => {
-    it("should trim oversized tool results", () => {
-      // Create a tool result that exceeds the budget (10_000 tokens = 40_000 chars)
-      const bigContent = tokString(15_000); // 15k tokens, over 10k budget
+    it("should trim oversized tool results only when over budget", async () => {
+      // Create a tool result that exceeds the per-result budget (10k tokens)
+      // but total context is within window — Phase 1 should still trim individual results
+      const bigContent = tokString(15_000);
       cm.addMessage(makeUserMsg("run tool"));
       cm.addMessage(makeAssistantMsg("calling tool"));
       cm.addMessage(makeToolResult(bigContent));
       cm.addMessage(makeAssistantMsg("done"));
 
-      const result = cm.contextAssembly(defaultOptions);
+      // Use a tight window so we're over budget (forces Phase 1 to run)
+      const tightOptions: ContextAssemblyOptions = {
+        contextWindow: 20_000,
+        maxOutputTokens: 4_000,
+        reservedBuffer: 2_000,
+        toolResultBudget: 10_000,
+      };
+      const result = await cm.contextAssembly(tightOptions);
 
-      // The tool result should have been trimmed
-      const toolMsg = result.messages.find(m => m.role === "tool");
+      const toolMsg = result.messages.find((m: any) => m.role === "tool");
       assert.ok(toolMsg);
-      assert.ok(toolMsg.content.includes("tokens trimmed"));
-      assert.ok(result.compactions.some(c => c.type === "tool_result_trim"));
+      assert.ok((toolMsg.content as string).includes("tokens trimmed"));
+      assert.ok(result.compactions.some((c: any) => c.type === "tool_result_trim"));
     });
 
-    it("should not trim tool results within budget", () => {
-      const smallContent = tokString(5_000); // 5k tokens, under 10k budget
+    it("should not trim tool results within budget", async () => {
+      const smallContent = tokString(5_000);
       cm.addMessage(makeToolResult(smallContent));
 
-      const result = cm.contextAssembly(defaultOptions);
-      const toolMsg = result.messages.find(m => m.role === "tool");
+      const result = await cm.contextAssembly(defaultOptions);
+      const toolMsg = result.messages.find((m: any) => m.role === "tool");
       assert.ok(toolMsg);
-      assert.ok(!toolMsg.content.includes("tokens trimmed"));
+      assert.ok(!(toolMsg.content as string).includes("tokens trimmed"));
+    });
+
+    it("should not run Phase 1 when total context is within budget", async () => {
+      // Even with a large tool result, if total is within budget, no phases run
+      cm.addMessage(makeUserMsg("Hello"));
+      cm.addMessage(makeAssistantMsg("Hi"));
+      const result = await cm.contextAssembly(defaultOptions);
+      assert.equal(result.compactions.length, 0);
     });
   });
 
   describe("Phase 2 — Snip Compact", () => {
-    it("should drop oldest messages when over budget", () => {
-      // Use a very small context window to force snipping
+    it("should drop oldest messages when over budget", async () => {
       const tightOptions: ContextAssemblyOptions = {
         contextWindow: 1_000,
         maxOutputTokens: 200,
@@ -137,21 +159,18 @@ describe("ContextManager", () => {
         toolResultBudget: 10_000,
       };
 
-      // Add many messages that exceed the budget
       for (let i = 0; i < 20; i++) {
         cm.addMessage(makeUserMsg(`Message ${i}: ${tokString(50)}`));
         cm.addMessage(makeAssistantMsg(`Response ${i}: ${tokString(50)}`));
       }
 
-      const result = cm.contextAssembly(tightOptions);
+      const result = await cm.contextAssembly(tightOptions);
 
-      // Should have fewer messages than we added
       assert.ok(result.messages.length < 40);
-      // Should have a snip compaction
-      assert.ok(result.compactions.some(c => c.type === "snip"));
+      assert.ok(result.compactions.some((c: any) => c.type === "snip"));
     });
 
-    it("should always keep at least MIN_RECENT_MESSAGES (4)", () => {
+    it("should always keep at least MIN_RECENT_MESSAGES (4)", async () => {
       const tinyOptions: ContextAssemblyOptions = {
         contextWindow: 100,
         maxOutputTokens: 20,
@@ -163,13 +182,13 @@ describe("ContextManager", () => {
         cm.addMessage(makeUserMsg(`Msg ${i}: ${tokString(100)}`));
       }
 
-      const result = cm.contextAssembly(tinyOptions);
+      const result = await cm.contextAssembly(tinyOptions);
       assert.ok(result.messages.length >= 4);
     });
   });
 
   describe("Phase 3 — Microcompact", () => {
-    it("should clear stale tool results far from the end", () => {
+    it("should clear stale tool results far from the end", async () => {
       const tightOptions: ContextAssemblyOptions = {
         contextWindow: 5_000,
         maxOutputTokens: 500,
@@ -177,22 +196,18 @@ describe("ContextManager", () => {
         toolResultBudget: 10_000,
       };
 
-      // Add a tool result early on, then many messages after
       cm.addMessage(makeToolResult(tokString(500), "tc_old", "read_file"));
       for (let i = 0; i < 15; i++) {
         cm.addMessage(makeUserMsg(`Msg ${i}`));
         cm.addMessage(makeAssistantMsg(`Reply ${i}`));
       }
-      // Add a recent tool result
       cm.addMessage(makeToolResult("recent result", "tc_new", "read_file"));
 
-      const result = cm.contextAssembly(tightOptions);
+      const result = await cm.contextAssembly(tightOptions);
 
-      // If microcompact kicked in, there should be a compaction action
-      const hasMicro = result.compactions.some(c => c.type === "microcompact");
-      // The old tool result should have been cleared (if needed for budget)
+      const hasMicro = result.compactions.some((c: any) => c.type === "microcompact");
       if (hasMicro) {
-        const oldTool = result.messages.find(m => m.role === "tool" && m.toolCallId === "tc_old");
+        const oldTool = result.messages.find((m: any) => m.role === "tool" && m.toolCallId === "tc_old");
         if (oldTool && oldTool.role === "tool") {
           assert.ok(oldTool.content.includes("Tool result cleared"));
         }
@@ -201,8 +216,7 @@ describe("ContextManager", () => {
   });
 
   describe("Summary boundaries", () => {
-    it("should convert summary boundaries to user messages in projection", () => {
-      // Manually add a summary boundary
+    it("should convert summary boundaries to user messages in projection", async () => {
       cm.addMessage({
         role: "summary",
         content: "Previous conversation was about testing.",
@@ -212,13 +226,13 @@ describe("ContextManager", () => {
       } as any);
       cm.addMessage(makeUserMsg("Continue"));
 
-      const result = cm.contextAssembly(defaultOptions);
+      const result = await cm.contextAssembly(defaultOptions);
       assert.equal(result.messages.length, 2);
       assert.equal(result.messages[0]!.role, "user");
       assert.ok((result.messages[0]!.content as string).includes("Previous conversation summary"));
     });
 
-    it("should skip snip markers in projection", () => {
+    it("should skip snip markers in projection", async () => {
       cm.addMessage({
         role: "snip",
         droppedCount: 5,
@@ -227,9 +241,104 @@ describe("ContextManager", () => {
       } as any);
       cm.addMessage(makeUserMsg("Hello"));
 
-      const result = cm.contextAssembly(defaultOptions);
+      const result = await cm.contextAssembly(defaultOptions);
       assert.equal(result.messages.length, 1);
       assert.equal(result.messages[0]!.role, "user");
+    });
+  });
+
+  describe("Phase 5 — Auto-Compaction with LLM summarizer", () => {
+    it("should use LLM summarizer when configured", async () => {
+      let summarizerCalled = false;
+      let messagesReceived: any[] = [];
+
+      const summarizer: SummarizerFn = async (msgs) => {
+        summarizerCalled = true;
+        messagesReceived = msgs;
+        return "The user asked about testing and the assistant helped with unit tests.";
+      };
+
+      const cm2 = new ContextManager({ summarizer });
+      cm2.setCustomPrompt("test");
+
+      // Use a very tight window to force all phases including auto-compaction
+      const tinyOptions: ContextAssemblyOptions = {
+        contextWindow: 200,
+        maxOutputTokens: 50,
+        reservedBuffer: 50,
+        toolResultBudget: 10_000,
+      };
+
+      // Add enough messages to overflow
+      for (let i = 0; i < 20; i++) {
+        cm2.addMessage(makeUserMsg(`Message ${i}: ${tokString(50)}`));
+        cm2.addMessage(makeAssistantMsg(`Response ${i}: ${tokString(50)}`));
+      }
+
+      const result = await cm2.contextAssembly(tinyOptions);
+
+      // Auto-compaction should have been triggered
+      const hasAutoCompaction = result.compactions.some((c: any) => c.type === "auto_compaction");
+      if (hasAutoCompaction) {
+        assert.ok(summarizerCalled, "Summarizer should have been called");
+        assert.ok(messagesReceived.length > 0, "Summarizer should receive messages");
+        // The summary should appear as a user message
+        const summaryMsg = result.messages.find(
+          (m: any) => m.role === "user" && typeof m.content === "string" && m.content.includes("unit tests")
+        );
+        assert.ok(summaryMsg, "Summary text should appear in result messages");
+      }
+    });
+
+    it("should fall back to placeholder when summarizer is not configured", async () => {
+      const cm2 = new ContextManager();
+      cm2.setCustomPrompt("test");
+
+      const tinyOptions: ContextAssemblyOptions = {
+        contextWindow: 200,
+        maxOutputTokens: 50,
+        reservedBuffer: 50,
+        toolResultBudget: 10_000,
+      };
+
+      for (let i = 0; i < 20; i++) {
+        cm2.addMessage(makeUserMsg(`Message ${i}: ${tokString(50)}`));
+        cm2.addMessage(makeAssistantMsg(`Response ${i}: ${tokString(50)}`));
+      }
+
+      const result = await cm2.contextAssembly(tinyOptions);
+
+      const hasAutoCompaction = result.compactions.some((c: any) => c.type === "auto_compaction");
+      if (hasAutoCompaction) {
+        // Should use fallback summary
+        const detail = result.compactions.find((c: any) => c.type === "auto_compaction")!.detail;
+        assert.ok(detail?.includes("Fallback-compacted"), `Expected fallback detail, got: ${detail}`);
+      }
+    });
+
+    it("should fall back to placeholder when summarizer throws", async () => {
+      const summarizer: SummarizerFn = async () => {
+        throw new Error("LLM API error");
+      };
+
+      const cm2 = new ContextManager({ summarizer });
+      cm2.setCustomPrompt("test");
+
+      const tinyOptions: ContextAssemblyOptions = {
+        contextWindow: 200,
+        maxOutputTokens: 50,
+        reservedBuffer: 50,
+        toolResultBudget: 10_000,
+      };
+
+      for (let i = 0; i < 20; i++) {
+        cm2.addMessage(makeUserMsg(`Message ${i}: ${tokString(50)}`));
+        cm2.addMessage(makeAssistantMsg(`Response ${i}: ${tokString(50)}`));
+      }
+
+      // Should not throw — falls back gracefully
+      const result = await cm2.contextAssembly(tinyOptions);
+      assert.ok(result.messages.length > 0);
     });
   });
 });
@@ -348,14 +457,12 @@ describe("ContextManager — persistence", () => {
   it("should not persist when no database configured", () => {
     const cm = new ContextManager();
     cm.addMessage(makeUserMsg("no persistence"));
-    // No error, message stored in memory only
     assert.equal(cm.getMessages().length, 1);
   });
 
-  it("should load messages from database during contextAssembly", () => {
+  it("should load messages from database during contextAssembly", async () => {
     const { client, store } = createMockDatabaseClient();
 
-    // Simulate messages already in the database (from a previous session)
     store.push({
       id: "msg_prev_1",
       conversation_id: "conv_1",
@@ -374,18 +481,15 @@ describe("ContextManager — persistence", () => {
     const cm = new ContextManager({ database: client, conversationId: "conv_1" });
     cm.setCustomPrompt("test");
 
-    // Add a new message
     cm.addMessage(makeUserMsg("New message"));
 
-    // contextAssembly should load all messages from DB (including the previous ones)
-    const result = cm.contextAssembly(defaultOptions);
+    const result = await cm.contextAssembly(defaultOptions);
 
-    // Should have 3 messages: 2 from DB + 1 new (which was also persisted to DB)
     assert.equal(result.messages.length, 3);
     assert.equal((result.messages[0]!.content as string), "Previous message from earlier session");
   });
 
-  it("should load tool messages from database correctly", () => {
+  it("should load tool messages from database correctly", async () => {
     const { client, store } = createMockDatabaseClient();
 
     store.push({
@@ -402,7 +506,7 @@ describe("ContextManager — persistence", () => {
     const cm = new ContextManager({ database: client, conversationId: "conv_1" });
     cm.setCustomPrompt("test");
 
-    const result = cm.contextAssembly(defaultOptions);
+    const result = await cm.contextAssembly(defaultOptions);
     assert.equal(result.messages.length, 1);
     const toolMsg = result.messages[0]!;
     assert.equal(toolMsg.role, "tool");

@@ -143,6 +143,15 @@ export type SendableMessage = UserMessage | AssistantMessage | ToolResultMessage
 // Context Assembly types
 // ---------------------------------------------------------------------------
 
+/**
+ * A function that summarizes a list of messages into a short text summary.
+ * Used by Phase 5 (Auto-Compaction) to generate LLM-based summaries.
+ *
+ * The agent configures this callback using the LLM package, keeping the
+ * ContextManager testable without real API calls.
+ */
+export type SummarizerFn = (messages: SendableMessage[]) => Promise<string>;
+
 export interface ContextAssemblyOptions {
   /** Model context window size in tokens */
   contextWindow: number;

@@ -28,6 +28,7 @@ import type {
   UserMessage,
   AssistantMessage,
   ToolResultMessage,
+  SendableMessage,
   ContextAssemblyOptions,
 } from "./types/index.js";
 import { ToolRegistry } from "./tools/index.js";
@@ -74,6 +75,47 @@ export class Agent extends EventEmitter<AgentEvents> {
         userName: config.userName,
       });
     }
+
+    // Configure LLM-based summarizer for Phase 5 auto-compaction
+    if (config.llm) {
+      this.configureSummarizer();
+    }
+  }
+
+  /**
+   * Set up the LLM-powered summarizer for context auto-compaction.
+   * Uses the configured model to summarize older messages when the
+   * context window overflows past all other compaction phases.
+   */
+  private configureSummarizer(): void {
+    const model = getModelById(this.config.llm!.model);
+    if (!model) return;
+
+    const streamOpts: StreamOptions = {
+      apiKey: this.config.llm!.apiKey,
+      maxTokens: 1024, // Summary should be concise
+      temperature: 0, // Deterministic summaries
+      envFallback: this.config.llm!.apiKey ? false : true,
+    };
+
+    this.context.setSummarizer(async (messages: SendableMessage[]): Promise<string> => {
+      const { toLLMMessages: convert } = await import("./context/convert.js");
+      const llmMessages = convert(messages);
+
+      const summaryPrompt = [
+        "You are a conversation summarizer. Summarize the following conversation messages into a concise paragraph.",
+        "Focus on: what the user asked for, what actions were taken, what tools were used and their key results, and any important decisions or outcomes.",
+        "Be specific about file names, function names, and concrete details. Do NOT include pleasantries or filler.",
+        "Keep the summary under 500 words.",
+      ].join(" ");
+
+      const response = await llmComplete(model, {
+        systemPrompt: summaryPrompt,
+        messages: llmMessages,
+      }, streamOpts);
+
+      return getTextContent(response);
+    });
   }
 
   get isRunning(): boolean {
@@ -206,7 +248,7 @@ export class Agent extends EventEmitter<AgentEvents> {
 
       for (let turn = 0; turn < maxTurns; turn++) {
         // Assemble context
-        const assembled = this.context.contextAssembly(this.buildAssemblyOptions(model));
+        const assembled = await this.context.contextAssembly(this.buildAssemblyOptions(model));
         const llmMessages = toLLMMessages(assembled.messages);
         const context: LLMContext = {
           systemPrompt: assembled.systemPrompt,
@@ -274,7 +316,7 @@ export class Agent extends EventEmitter<AgentEvents> {
 
       for (let turn = 0; turn < maxTurns; turn++) {
         // Assemble context
-        const assembled = this.context.contextAssembly(this.buildAssemblyOptions(model));
+        const assembled = await this.context.contextAssembly(this.buildAssemblyOptions(model));
         const llmMessages = toLLMMessages(assembled.messages);
         const context: LLMContext = {
           systemPrompt: assembled.systemPrompt,
@@ -358,6 +400,7 @@ export type {
   ContextAssemblyResult,
   CompactionAction,
   DatabaseClient,
+  SummarizerFn,
 } from "./types/index.js";
 
 // Re-export token utilities

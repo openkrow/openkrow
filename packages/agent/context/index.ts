@@ -7,12 +7,13 @@
  * for conversation state.
  *
  * The `contextAssembly()` method applies up to 5 compaction mechanisms in order
- * to fit the conversation into the model's context window:
+ * to fit the conversation into the model's context window. Each phase only
+ * runs if the context is still over budget after the previous phase:
  *   1. Tool Result Budget — trim oversized individual tool results
  *   2. Snip Compact — drop oldest message blocks entirely
  *   3. Microcompact — selectively clear stale tool outputs
  *   4. Context Collapse — summarize collapsible blocks at read time
- *   5. Auto-Compaction — LLM-generated summary (placeholder)
+ *   5. Auto-Compaction — LLM-generated summary of older messages
  *
  * IMPORTANT: The original messages are NEVER mutated during assembly.
  */
@@ -32,6 +33,7 @@ import type {
   ContextAssemblyOptions,
   ContextAssemblyResult,
   CompactionAction,
+  SummarizerFn,
 } from "../types/index.js";
 
 import {
@@ -60,6 +62,8 @@ const COLLAPSE_MIN_BLOCK_SIZE = 3;
 export interface ContextManagerOptions {
   database?: DatabaseClient;
   conversationId?: string;
+  /** Optional summarizer for Phase 5 auto-compaction. Set via `setSummarizer()`. */
+  summarizer?: SummarizerFn;
 }
 
 export class ContextManager {
@@ -68,10 +72,12 @@ export class ContextManager {
   private customPromptOverride: string | undefined;
   private database: DatabaseClient | undefined;
   private conversationId: string | undefined;
+  private summarizer: SummarizerFn | undefined;
 
   constructor(options?: ContextManagerOptions) {
     this.database = options?.database;
     this.conversationId = options?.conversationId;
+    this.summarizer = options?.summarizer;
   }
 
   // ---- Persistence configuration ----
@@ -82,10 +88,21 @@ export class ContextManager {
   configure(options: ContextManagerOptions): void {
     if (options.database !== undefined) this.database = options.database;
     if (options.conversationId !== undefined) this.conversationId = options.conversationId;
+    if (options.summarizer !== undefined) this.summarizer = options.summarizer;
   }
 
   get isPersistedMode(): boolean {
     return this.database !== undefined && this.conversationId !== undefined;
+  }
+
+  // ---- Summarizer ----
+
+  /**
+   * Set the summarizer function used by Phase 5 (Auto-Compaction).
+   * The Agent sets this to an LLM-powered summarizer.
+   */
+  setSummarizer(fn: SummarizerFn | undefined): void {
+    this.summarizer = fn;
   }
 
   // ---- Prompt management ----
@@ -134,11 +151,13 @@ export class ContextManager {
    * Assemble the current conversation into a context that fits within the
    * model's token budget.
    *
+   * Each compaction phase only runs if the context is still over budget.
+   * Phase 5 uses an LLM-based summarizer when available.
+   *
    * When a database is configured, messages are loaded from the database
-   * first to ensure we have the complete conversation history (including
-   * messages from previous sessions or other agents).
+   * first to ensure we have the complete conversation history.
    */
-  contextAssembly(options: ContextAssemblyOptions): ContextAssemblyResult {
+  async contextAssembly(options: ContextAssemblyOptions): Promise<ContextAssemblyResult> {
     const {
       contextWindow,
       maxOutputTokens,
@@ -162,22 +181,39 @@ export class ContextManager {
     const effectiveBudget = contextWindow - maxOutputTokens - reservedBuffer - systemTokens - toolTokens;
 
     const compactions: CompactionAction[] = [];
-
     let projected = this.projectSendableMessages();
 
-    // Phase 1: Tool Result Budget
+    // Helper: check if we're within budget and return early if so
+    const makeResult = (msgs: SendableMessage[]): ContextAssemblyResult => {
+      const totalTokens = estimateTotalTokens(msgs);
+      return {
+        messages: msgs,
+        systemPrompt,
+        estimatedTokens: totalTokens + systemTokens + toolTokens,
+        compactions,
+      };
+    };
+
+    let totalTokens = estimateTotalTokens(projected);
+
+    // Already within budget — no compaction needed
+    if (totalTokens <= effectiveBudget) {
+      return makeResult(projected);
+    }
+
+    // Phase 1: Tool Result Budget — only if over budget
     const phase1 = this.applyToolResultBudget(projected, toolResultBudget);
     projected = phase1.messages;
     if (phase1.tokensFreed > 0) {
       compactions.push({ type: "tool_result_trim", tokensFreed: phase1.tokensFreed, detail: `Trimmed ${phase1.trimCount} tool results` });
     }
 
-    let totalTokens = estimateTotalTokens(projected);
+    totalTokens = estimateTotalTokens(projected);
     if (totalTokens <= effectiveBudget) {
-      return { messages: projected, systemPrompt, estimatedTokens: totalTokens + systemTokens + toolTokens, compactions };
+      return makeResult(projected);
     }
 
-    // Phase 2: Snip Compact
+    // Phase 2: Snip Compact — only if still over budget
     const phase2 = this.applySnipCompact(projected, totalTokens, effectiveBudget);
     projected = phase2.messages;
     if (phase2.tokensFreed > 0) {
@@ -187,10 +223,10 @@ export class ContextManager {
 
     totalTokens = estimateTotalTokens(projected);
     if (totalTokens <= effectiveBudget) {
-      return { messages: projected, systemPrompt, estimatedTokens: totalTokens + systemTokens + toolTokens, compactions };
+      return makeResult(projected);
     }
 
-    // Phase 3: Microcompact
+    // Phase 3: Microcompact — only if still over budget
     const phase3 = this.applyMicrocompact(projected, totalTokens, effectiveBudget);
     projected = phase3.messages;
     if (phase3.tokensFreed > 0) {
@@ -199,10 +235,10 @@ export class ContextManager {
 
     totalTokens = estimateTotalTokens(projected);
     if (totalTokens <= effectiveBudget) {
-      return { messages: projected, systemPrompt, estimatedTokens: totalTokens + systemTokens + toolTokens, compactions };
+      return makeResult(projected);
     }
 
-    // Phase 4: Context Collapse
+    // Phase 4: Context Collapse — only if still over budget
     const phase4 = this.applyContextCollapse(projected, totalTokens, effectiveBudget);
     projected = phase4.messages;
     if (phase4.tokensFreed > 0) {
@@ -211,18 +247,17 @@ export class ContextManager {
 
     totalTokens = estimateTotalTokens(projected);
     if (totalTokens <= effectiveBudget) {
-      return { messages: projected, systemPrompt, estimatedTokens: totalTokens + systemTokens + toolTokens, compactions };
+      return makeResult(projected);
     }
 
-    // Phase 5: Auto-Compaction
-    const phase5 = this.applyAutoCompaction(projected, totalTokens, effectiveBudget);
+    // Phase 5: Auto-Compaction — LLM-based summarization (only if still over budget)
+    const phase5 = await this.applyAutoCompaction(projected, totalTokens, effectiveBudget);
     projected = phase5.messages;
     if (phase5.tokensFreed > 0) {
       compactions.push({ type: "auto_compaction", tokensFreed: phase5.tokensFreed, detail: phase5.detail });
     }
 
-    totalTokens = estimateTotalTokens(projected);
-    return { messages: projected, systemPrompt, estimatedTokens: totalTokens + systemTokens + toolTokens, compactions };
+    return makeResult(projected);
   }
 
   // ---- Database persistence ----
@@ -531,32 +566,55 @@ export class ContextManager {
     return { messages: result, tokensFreed: freed, collapsedBlocks };
   }
 
-  // ---- Phase 5: Auto-Compaction ----
+  // ---- Phase 5: Auto-Compaction (LLM-based summarization) ----
 
-  private applyAutoCompaction(
+  /**
+   * Last-resort compaction. Selects the oldest half of messages to summarize.
+   *
+   * When a `summarizer` callback is configured, calls the LLM to produce a
+   * condensed summary of the older messages. When no summarizer is available,
+   * falls back to a simple placeholder summary (message metadata only).
+   */
+  private async applyAutoCompaction(
     messages: SendableMessage[],
     currentTokens: number,
     budget: number,
-  ): { messages: SendableMessage[]; tokensFreed: number; detail: string } {
+  ): Promise<{ messages: SendableMessage[]; tokensFreed: number; detail: string }> {
     const excess = currentTokens - budget;
     if (excess <= 0) return { messages, tokensFreed: 0, detail: "" };
 
+    // Select messages to summarize: keep at least MIN_RECENT_MESSAGES
     const keepCount = Math.max(MIN_RECENT_MESSAGES, Math.ceil(messages.length / 2));
     const dropCount = messages.length - keepCount;
-    const dropped = messages.slice(0, dropCount);
+
+    if (dropCount <= 0) {
+      return { messages, tokensFreed: 0, detail: "Nothing to compact" };
+    }
+
+    const toSummarize = messages.slice(0, dropCount);
     const kept = messages.slice(dropCount);
+    const droppedTokens = toSummarize.reduce((s, m) => s + estimateMessageTokens(m), 0);
 
-    const droppedTokens = dropped.reduce((s, m) => s + estimateMessageTokens(m), 0);
+    // Generate summary text
+    let summaryText: string;
 
-    const summaryMsg: UserMessage = {
-      role: "user",
-      content: `[Auto-compacted: ${dropCount} older messages (≈${droppedTokens} tokens) were removed to fit context window. Recent conversation preserved.]`,
-      timestamp: kept[0]?.timestamp ?? Date.now(),
-    };
+    if (this.summarizer) {
+      // Use LLM-based summarization
+      try {
+        summaryText = await this.summarizer(toSummarize);
+      } catch (err) {
+        // Fallback to placeholder if summarization fails
+        summaryText = this.buildFallbackSummary(toSummarize, droppedTokens);
+      }
+    } else {
+      // No summarizer configured — use placeholder
+      summaryText = this.buildFallbackSummary(toSummarize, droppedTokens);
+    }
 
+    // Create the summary boundary (persisted to conversation history)
     const summaryBoundary: SummaryBoundary = {
       role: "summary",
-      content: summaryMsg.content as string,
+      content: summaryText,
       summarizedCount: dropCount,
       tokensFreed: droppedTokens,
       timestamp: Date.now(),
@@ -567,11 +625,57 @@ export class ContextManager {
       this.persistMessage(summaryBoundary);
     }
 
+    // Project the summary as a user message for the LLM
+    const summaryMsg: UserMessage = {
+      role: "user",
+      content: `[Previous conversation summary]\n${summaryText}`,
+      timestamp: summaryBoundary.timestamp,
+    };
+
     return {
       messages: [summaryMsg, ...kept],
       tokensFreed: droppedTokens - estimateMessageTokens(summaryMsg),
-      detail: `Auto-compacted ${dropCount} messages (≈${droppedTokens} tokens)`,
+      detail: this.summarizer
+        ? `LLM-summarized ${dropCount} messages (≈${droppedTokens} tokens)`
+        : `Fallback-compacted ${dropCount} messages (≈${droppedTokens} tokens)`,
     };
+  }
+
+  /**
+   * Build a fallback summary when no LLM summarizer is available.
+   * Extracts key metadata from the messages being dropped.
+   */
+  private buildFallbackSummary(messages: SendableMessage[], totalTokens: number): string {
+    const userMsgs = messages.filter(m => m.role === "user");
+    const assistantMsgs = messages.filter(m => m.role === "assistant");
+    const toolMsgs = messages.filter(m => m.role === "tool") as ToolResultMessage[];
+
+    const parts: string[] = [];
+    parts.push(`${messages.length} older messages (≈${totalTokens} tokens) were summarized.`);
+
+    if (userMsgs.length > 0) {
+      parts.push(`User sent ${userMsgs.length} message(s).`);
+      // Include first user message as context hint
+      const firstContent = typeof userMsgs[0]!.content === "string"
+        ? userMsgs[0]!.content
+        : "[complex content]";
+      if (firstContent.length <= 200) {
+        parts.push(`First user message: "${firstContent}"`);
+      } else {
+        parts.push(`First user message: "${firstContent.slice(0, 200)}..."`);
+      }
+    }
+
+    if (assistantMsgs.length > 0) {
+      parts.push(`Assistant responded ${assistantMsgs.length} time(s).`);
+    }
+
+    if (toolMsgs.length > 0) {
+      const toolNames = [...new Set(toolMsgs.map(m => m.toolName))];
+      parts.push(`Tools used: ${toolNames.join(", ")} (${toolMsgs.length} call(s)).`);
+    }
+
+    return parts.join(" ");
   }
 
   // ---- Helpers ----
