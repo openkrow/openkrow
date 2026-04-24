@@ -408,7 +408,6 @@ export type {
 } from "./tools/index.js";
 export { ContextManager } from "./context/index.js";
 export type { ContextManagerOptions } from "./context/index.js";
-export { ConversationState } from "./state/index.js";
 export { PersonalityManager } from "./personality/index.js";
 export { WorkspaceManager } from "./workspace/index.js";
 export { SkillManager } from "./skills/index.js";
