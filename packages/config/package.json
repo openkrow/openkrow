@@ -1,0 +1,30 @@
+{
+  "name": "@openkrow/config",
+  "version": "0.1.0",
+  "description": "Centralized configuration management for OpenKrow — model selection, API keys, OAuth credentials, and app settings. Backed by @openkrow/database.",
+  "type": "module",
+  "main": "./dist/src/index.js",
+  "types": "./dist/src/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/src/index.d.ts",
+      "import": "./dist/src/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "clean": "rm -rf dist",
+    "typecheck": "tsc --noEmit",
+    "test": "bun test"
+  },
+  "dependencies": {
+    "@openkrow/database": "*",
+    "@openkrow/llm": "*"
+  },
+  "devDependencies": {
+    "@types/node": "^22.12.0",
+    "bun-types": "^1.1.0",
+    "typescript": "^5.7.0"
+  }
+}

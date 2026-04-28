@@ -18,8 +18,8 @@ Principles:
 /**
  * OpenKrow - the main orchestrator class.
  *
- * Ties together config loading, LLM client creation, agent setup,
- * and tool registration into a single cohesive interface.
+ * Assembles config, LLM client, workspace, and agent into a single interface.
+ * Tools are auto-registered by the agent's ToolManager.
  */
 export class OpenKrow {
   private agent: Agent;
@@ -38,10 +38,6 @@ export class OpenKrow {
 
   /**
    * Create and initialize an OpenKrow instance.
-   * Loads config from disk/env, sets up the LLM client, and registers tools.
-   *
-   * When `workspacePath` is provided (via overrides or config), a WorkspaceManager
-   * is initialised and passed to the Agent. Tools are auto-registered by ToolManager.
    */
   static async create(
     overrides?: Partial<OpenKrowConfig>
@@ -66,49 +62,37 @@ export class OpenKrow {
 
     const agent = new Agent({
       name: "openkrow",
-      description: "Open-source desktop AI assistant",
+      description: "Open-source AI assistant",
       customPrompt: config.systemPrompt ?? SYSTEM_PROMPT,
       llm: llmConfig,
       maxTurns: config.maxTurns,
       ...(workspaceManager ? { workspace: workspaceManager } : {}),
     });
 
-    // Tools are auto-registered by ToolManager — no manual registration needed.
-
     return new OpenKrow(agent, config, workspaceManager);
   }
 
-  /**
-   * Run a single prompt and return the full response.
-   */
+  /** Run a single prompt and return the full response. */
   async run(prompt: string): Promise<string> {
     return this.agent.run(prompt);
   }
 
-  /**
-   * Stream a response token-by-token.
-   */
+  /** Stream a response token-by-token. */
   stream(prompt: string): AsyncIterable<string> {
     return this.agent.stream(prompt);
   }
 
-  /**
-   * Access the underlying Agent for advanced usage (events, state, etc.)
-   */
+  /** Access the underlying Agent. */
   getAgent(): Agent {
     return this.agent;
   }
 
-  /**
-   * Access the resolved configuration.
-   */
+  /** Access the resolved configuration. */
   getConfig(): Readonly<OpenKrowConfig> {
     return this.config;
   }
 
-  /**
-   * Access the workspace manager (null if no workspace configured).
-   */
+  /** Access the workspace manager (null if no workspace configured). */
   getWorkspace(): WorkspaceManager | null {
     return this.workspace;
   }

@@ -22,7 +22,9 @@ import {
   type ModelListResponse,
 } from "./types.js";
 import { VERSION } from "../version.js";
-import { getAllModels, getProviders } from "@openkrow/llm";
+
+/** Helper accessor for the ConfigManager through the orchestrator. */
+const cm = (o: Orchestrator) => o.configManager;
 
 export interface OpenKrowServerOptions {
   config?: Partial<ServerConfig>;
@@ -53,7 +55,7 @@ export class OpenKrowServer {
         model: options.model ?? "claude-sonnet-4-20250514",
         apiKey: options.apiKey ?? process.env.ANTHROPIC_API_KEY ?? process.env.OPENAI_API_KEY,
       },
-      enableTools: true,
+      workspacePath: this.workspacePath,
     });
   }
 
@@ -217,17 +219,7 @@ export class OpenKrowServer {
             (path === "/auth/keys" || path === `${self.config.apiPrefix}/auth/keys`) &&
             req.method === "GET"
           ) {
-            const allSettings = self.orchestrator.database.settings.getAllAsObject();
-            const keys: ApiKeyListResponse["keys"] = [];
-            for (const [k, v] of Object.entries(allSettings)) {
-              if (k.startsWith("apikey:")) {
-                const provider = k.slice("apikey:".length);
-                keys.push({
-                  provider,
-                  masked: v.length > 8 ? v.slice(0, 4) + "..." + v.slice(-4) : "****",
-                });
-              }
-            }
+            const keys = cm(self.orchestrator).listApiKeys();
             return Response.json({ keys } as ApiKeyListResponse, { headers: corsHeaders });
           }
 
@@ -251,7 +243,7 @@ export class OpenKrowServer {
               );
             }
             const { provider: prov, apiKey: key } = body as ApiKeySetRequest;
-            self.orchestrator.setSetting(`apikey:${prov}`, key);
+            cm(self.orchestrator).setApiKey(prov, key);
             return Response.json({ ok: true, provider: prov }, { headers: corsHeaders });
           }
 
@@ -259,7 +251,7 @@ export class OpenKrowServer {
           const deleteKeyMatch = path.match(/^(?:\/api)?\/auth\/keys\/([^/]+)$/);
           if (deleteKeyMatch && req.method === "DELETE") {
             const provider = deleteKeyMatch[1];
-            const deleted = self.orchestrator.database.settings.delete(`apikey:${provider}`);
+            const deleted = cm(self.orchestrator).removeApiKey(provider);
             if (!deleted) {
               return Response.json(
                 { error: `No API key stored for provider: ${provider}`, code: "NOT_FOUND" } as ErrorResponse,
@@ -278,10 +270,10 @@ export class OpenKrowServer {
             (path === "/models" || path === `${self.config.apiPrefix}/models`) &&
             req.method === "GET"
           ) {
-            const allModels = getAllModels();
-            const providers = getProviders();
+            const allModels = cm(self.orchestrator).listModels();
+            const providers = cm(self.orchestrator).listProviders();
             const response: ModelListResponse = {
-              models: allModels.map((m) => ({
+              models: allModels.map((m: { id: string; name: string; provider: string; contextWindow: number; maxTokens: number; supportsTools: boolean }) => ({
                 id: m.id,
                 name: m.name,
                 provider: m.provider,
@@ -299,9 +291,8 @@ export class OpenKrowServer {
             (path === "/config/model" || path === `${self.config.apiPrefix}/config/model`) &&
             req.method === "GET"
           ) {
-            const provider = self.orchestrator.getSetting("config:provider") ?? "anthropic";
-            const model = self.orchestrator.getSetting("config:model") ?? "claude-sonnet-4-20250514";
-            return Response.json({ provider, model } as ModelConfigResponse, { headers: corsHeaders });
+            const active = cm(self.orchestrator).getActiveModel();
+            return Response.json(active as ModelConfigResponse, { headers: corsHeaders });
           }
 
           // POST /config/model — set current model config
@@ -324,8 +315,7 @@ export class OpenKrowServer {
               );
             }
             const { provider: prov, model: mod } = body as ModelConfigSetRequest;
-            self.orchestrator.setSetting("config:provider", prov);
-            self.orchestrator.setSetting("config:model", mod);
+            cm(self.orchestrator).setActiveModel({ provider: prov as any, model: mod });
             return Response.json({ ok: true, provider: prov, model: mod }, { headers: corsHeaders });
           }
 

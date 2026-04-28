@@ -18,8 +18,6 @@ describe("OpenKrow App", () => {
       assert.equal(config.model, "claude-sonnet-4-20250514");
       assert.equal(config.maxTokens, 4096);
       assert.equal(config.temperature, 0);
-      assert.equal(config.enableTools, true);
-      assert.equal(config.enableStreaming, true);
       assert.equal(config.maxTurns, 20);
     });
 
@@ -33,9 +31,7 @@ describe("OpenKrow App", () => {
       assert.equal(config.provider, "openai");
       assert.equal(config.model, "gpt-4o");
       assert.equal(config.maxTokens, 8192);
-      // Other fields stay default
       assert.equal(config.temperature, 0);
-      assert.equal(config.enableTools, true);
     });
 
     it("should respect env var overrides", async () => {
@@ -50,7 +46,6 @@ describe("OpenKrow App", () => {
         assert.equal(config.provider, "google");
         assert.equal(config.model, "gemini-2.0-flash");
       } finally {
-        // Restore
         if (origProvider === undefined) delete process.env.OPENKROW_PROVIDER;
         else process.env.OPENKROW_PROVIDER = origProvider;
         if (origModel === undefined) delete process.env.OPENKROW_MODEL;

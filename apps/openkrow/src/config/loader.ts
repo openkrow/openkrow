@@ -6,7 +6,7 @@ import * as os from "node:os";
  * OpenKrow configuration schema.
  */
 export interface OpenKrowConfig {
-  /** LLM provider: "openai" | "anthropic" | "google" */
+  /** LLM provider */
   provider: "openai" | "anthropic" | "google";
   /** Model identifier */
   model: string;
@@ -18,10 +18,6 @@ export interface OpenKrowConfig {
   maxTokens: number;
   /** Temperature for generation */
   temperature: number;
-  /** Enable tool calling */
-  enableTools: boolean;
-  /** Enable streaming responses */
-  enableStreaming: boolean;
   /** Maximum agent turns per prompt */
   maxTurns: number;
   /** Custom system prompt override */
@@ -35,8 +31,6 @@ const DEFAULT_CONFIG: OpenKrowConfig = {
   model: "claude-sonnet-4-20250514",
   maxTokens: 4096,
   temperature: 0,
-  enableTools: true,
-  enableStreaming: true,
   maxTurns: 20,
 };
 
