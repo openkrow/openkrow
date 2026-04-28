@@ -25,8 +25,6 @@ export interface ChatRequest {
   message: string;
   /** Optional conversation ID to continue a conversation */
   conversationId?: string;
-  /** Optional session ID */
-  sessionId?: string;
   /** Whether to stream the response */
   stream?: boolean;
   /** Optional provider override for this request */
@@ -40,8 +38,6 @@ export interface ChatResponse {
   response: string;
   /** Conversation ID for continuing the conversation */
   conversationId: string;
-  /** Session ID */
-  sessionId: string;
   /** Message ID */
   messageId: string;
 }

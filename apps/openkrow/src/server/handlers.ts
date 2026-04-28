@@ -2,7 +2,7 @@
  * Chat endpoint handlers
  */
 
-import { Orchestrator } from "../orchestrator/index.js";
+import type { Orchestrator } from "../orchestrator/index.js";
 import type {
   ChatRequest,
   ChatResponse,
@@ -15,34 +15,22 @@ import type {
 export async function handleChat(
   orchestrator: Orchestrator,
   request: ChatRequest,
-  workspacePath: string
 ): Promise<ChatResponse> {
-  // Get or create session
-  let sessionId = request.sessionId;
-  if (!sessionId) {
-    const session = orchestrator.getOrCreateSession(workspacePath);
-    sessionId = session.id;
-  }
-
-  // Get or create conversation
   let conversationId = request.conversationId;
   if (!conversationId) {
-    const conversation = orchestrator.getOrCreateConversation(sessionId);
+    const conversation = orchestrator.getOrCreateConversation();
     conversationId = conversation.id;
   }
 
-  // Build model/provider overrides from request
   const overrides = (request.provider || request.model)
     ? { provider: request.provider, model: request.model }
     : undefined;
 
-  // Run chat
   const result = await orchestrator.chat(conversationId, request.message, overrides);
 
   return {
     response: result.response,
     conversationId,
-    sessionId,
     messageId: result.messageId,
   };
 }
@@ -53,28 +41,17 @@ export async function handleChat(
 export async function* handleStreamChat(
   orchestrator: Orchestrator,
   request: ChatRequest,
-  workspacePath: string
 ): AsyncGenerator<string, ChatResponse, unknown> {
-  // Get or create session
-  let sessionId = request.sessionId;
-  if (!sessionId) {
-    const session = orchestrator.getOrCreateSession(workspacePath);
-    sessionId = session.id;
-  }
-
-  // Get or create conversation
   let conversationId = request.conversationId;
   if (!conversationId) {
-    const conversation = orchestrator.getOrCreateConversation(sessionId);
+    const conversation = orchestrator.getOrCreateConversation();
     conversationId = conversation.id;
   }
 
-  // Build model/provider overrides from request
   const overrides = (request.provider || request.model)
     ? { provider: request.provider, model: request.model }
     : undefined;
 
-  // Stream chat
   const generator = orchestrator.streamChat(conversationId, request.message, overrides);
   let result: { messageId: string } | undefined;
 
@@ -88,9 +65,8 @@ export async function* handleStreamChat(
   }
 
   return {
-    response: "", // Response was streamed
+    response: "",
     conversationId,
-    sessionId,
     messageId: result?.messageId ?? "",
   };
 }
@@ -142,7 +118,6 @@ export function validateChatRequest(body: unknown): {
     data: {
       message: data.message,
       conversationId: typeof data.conversationId === "string" ? data.conversationId : undefined,
-      sessionId: typeof data.sessionId === "string" ? data.sessionId : undefined,
       stream: typeof data.stream === "boolean" ? data.stream : false,
       provider: typeof data.provider === "string" ? data.provider : undefined,
       model: typeof data.model === "string" ? data.model : undefined,

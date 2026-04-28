@@ -1,30 +1,28 @@
 /**
- * Orchestrator - Central manager for database, agents, and sessions
+ * Orchestrator - Central manager for agents and conversations
  *
- * The orchestrator is the core of OpenKrow server, managing:
- * - Database connections and repositories
- * - Agent instances per session
- * - Session and conversation state
- * - Configuration via ConfigManager
+ * Uses two database clients:
+ * - Global: settings (API keys, model config, etc.)
+ * - Workspace: conversations + messages (per-workspace)
  */
 
 import {
-  createDatabaseClient,
-  type DatabaseClient,
+  createGlobalClient,
+  createWorkspaceClient,
   type DatabaseConfig,
-  type User,
-  type Session,
-  type Conversation,
+  type GlobalDatabaseClient,
+  type WorkspaceDatabaseClient,
 } from "@openkrow/database";
 import { ConfigManager } from "@openkrow/config";
 import { Agent } from "@openkrow/agent";
 import { WorkspaceManager } from "@openkrow/workspace";
 import type { LLMConfig } from "@openkrow/llm";
+import type { Conversation } from "@openkrow/database";
 
 export interface OrchestratorConfig {
-  /** Database configuration */
+  /** Database configuration for the global DB */
   database?: DatabaseConfig;
-  /** Default LLM configuration for agents (used as fallback if ConfigManager has no active model) */
+  /** Default LLM configuration for agents (fallback if ConfigManager has no active model) */
   llm?: LLMConfig;
   /** System prompt override for agents */
   systemPrompt?: string;
@@ -35,37 +33,37 @@ export interface OrchestratorConfig {
 }
 
 /**
- * Orchestrator manages the lifecycle of agents, sessions, and database interactions
+ * Orchestrator manages the lifecycle of agents and database interactions
  */
 export class Orchestrator {
-  private db: DatabaseClient;
+  private globalDb: GlobalDatabaseClient;
+  private workspaceDb: WorkspaceDatabaseClient | null = null;
   private _config: OrchestratorConfig;
   private _configManager: ConfigManager;
   private agents: Map<string, Agent> = new Map();
-  /** Active AbortControllers keyed by conversationId — one active request per conversation. */
   private activeRequests: Map<string, AbortController> = new Map();
-  private currentUser: User | null = null;
   private workspace: WorkspaceManager | null = null;
 
-  private constructor(db: DatabaseClient, config: OrchestratorConfig) {
-    this.db = db;
+  private constructor(
+    globalDb: GlobalDatabaseClient,
+    workspaceDb: WorkspaceDatabaseClient | null,
+    config: OrchestratorConfig,
+  ) {
+    this.globalDb = globalDb;
+    this.workspaceDb = workspaceDb;
     this._config = config;
-    this._configManager = new ConfigManager(db.settings);
+    this._configManager = new ConfigManager(globalDb.settings);
 
-    // Initialize workspace: prefer ConfigManager, fall back to config param
     const wsPath = config.workspacePath ?? this._configManager.getWorkspacePath();
     if (wsPath) {
       this.workspace = new WorkspaceManager();
       this.workspace.init(wsPath);
+      if (!this.workspaceDb) {
+        this.workspaceDb = createWorkspaceClient(wsPath);
+      }
     }
   }
 
-  /** Get the database client (for direct access by the app) */
-  get database(): DatabaseClient {
-    return this.db;
-  }
-
-  /** Get the ConfigManager for reading/writing all configuration. */
   get configManager(): ConfigManager {
     return this._configManager;
   }
@@ -74,13 +72,15 @@ export class Orchestrator {
    * Create and initialize the orchestrator
    */
   static create(config: OrchestratorConfig): Orchestrator {
-    const db = createDatabaseClient(config.database);
-    return new Orchestrator(db, config);
+    const globalDb = createGlobalClient(config.database);
+    const workspaceDb = config.workspacePath
+      ? createWorkspaceClient(config.workspacePath)
+      : null;
+    return new Orchestrator(globalDb, workspaceDb, config);
   }
 
   /**
    * Resolve the LLM config for a request.
-   * Priority: request overrides → ConfigManager active model → constructor llm param.
    */
   resolveLLMConfig(overrides?: { provider?: string; model?: string }): LLMConfig {
     const active = this._configManager.getActiveModel();
@@ -100,80 +100,47 @@ export class Orchestrator {
   }
 
   // -----------------------------------------------------------------------
-  // User / Session / Conversation management
+  // Conversation
   // -----------------------------------------------------------------------
 
-  getUser(): User {
-    if (!this.currentUser) {
-      this.currentUser = this.db.users.getOrCreateDefault();
+  private ensureWorkspaceDb(): WorkspaceDatabaseClient {
+    if (!this.workspaceDb) {
+      throw new Error("No workspace configured. Provide workspacePath to use conversations.");
     }
-    return this.currentUser;
+    return this.workspaceDb;
   }
 
-  createSession(workspacePath: string): Session {
-    const user = this.getUser();
-    return this.db.sessions.create({
-      user_id: user.id,
-      workspace_path: workspacePath,
-    });
-  }
-
-  getSession(sessionId: string): Session | null {
-    return this.db.sessions.findById(sessionId);
-  }
-
-  getOrCreateSession(workspacePath: string): Session {
-    const user = this.getUser();
-    const activeSession = this.db.sessions.getActiveSession(user.id);
-
-    if (activeSession && activeSession.workspace_path === workspacePath) {
-      return activeSession;
-    }
-
-    return this.createSession(workspacePath);
-  }
-
-  endSession(sessionId: string): void {
-    this.db.sessions.endSession(sessionId);
-    this.agents.delete(sessionId);
-  }
-
-  createConversation(sessionId: string, title?: string): Conversation {
-    return this.db.conversations.create({ session_id: sessionId, title });
+  getOrCreateConversation(): Conversation {
+    const db = this.ensureWorkspaceDb();
+    const conversations = db.conversations.getRecent(1);
+    if (conversations.length > 0) return conversations[0]!;
+    return db.conversations.create();
   }
 
   getConversation(conversationId: string): Conversation | null {
-    return this.db.conversations.findById(conversationId);
-  }
-
-  getOrCreateConversation(sessionId: string): Conversation {
-    const conversations = this.db.conversations.findBySessionId(sessionId, 1);
-    if (conversations.length > 0) return conversations[0];
-    return this.createConversation(sessionId);
+    return this.ensureWorkspaceDb().conversations.findById(conversationId);
   }
 
   // -----------------------------------------------------------------------
   // Agent management
   // -----------------------------------------------------------------------
 
-  getAgent(sessionId: string, conversationId: string): Agent {
-    const key = `${sessionId}:${conversationId}`;
-    let agent = this.agents.get(key);
+  getAgent(conversationId: string): Agent {
+    let agent = this.agents.get(conversationId);
 
     if (!agent) {
       const systemPrompt = this._config.systemPrompt ?? this._configManager.getSystemPrompt() ?? undefined;
 
       agent = new Agent({
-        name: `openkrow-${sessionId}`,
+        name: `openkrow-${conversationId}`,
         description: "OpenKrow AI assistant",
         customPrompt: systemPrompt,
-        // No llm here — resolved per-request in chat()/streamChat()
-        database: this.db,
+        database: this.ensureWorkspaceDb(),
         conversationId,
         ...(this.workspace ? { workspace: this.workspace } : {}),
       });
 
-      this.agents.set(key, agent);
+      this.agents.set(conversationId, agent);
     }
 
     return agent;
@@ -186,15 +153,13 @@ export class Orchestrator {
   async chat(
     conversationId: string,
     message: string,
-    overrides?: { provider?: string; model?: string }
+    overrides?: { provider?: string; model?: string },
   ): Promise<{ response: string; messageId: string }> {
-    const conversation = this.getConversation(conversationId);
+    const db = this.ensureWorkspaceDb();
+    const conversation = db.conversations.findById(conversationId);
     if (!conversation) throw new Error(`Conversation not found: ${conversationId}`);
 
-    const session = this.getSession(conversation.session_id);
-    if (!session) throw new Error(`Session not found: ${conversation.session_id}`);
-
-    const agent = this.getAgent(session.id, conversationId);
+    const agent = this.getAgent(conversationId);
     const llmConfig = this.resolveLLMConfig(overrides);
     const maxTurns = this._config.maxTurns ?? this._configManager.getMaxTurns();
 
@@ -208,9 +173,9 @@ export class Orchestrator {
         signal: controller.signal,
       });
 
-      const messages = this.db.messages.getLastMessages(conversationId, 1);
+      const messages = db.messages.getLastMessages(conversationId, 1);
       const lastMessage = messages[messages.length - 1];
-      this.db.conversations.update(conversationId, {});
+      db.conversations.update(conversationId, {});
 
       return { response, messageId: lastMessage?.id ?? "" };
     } finally {
@@ -221,15 +186,13 @@ export class Orchestrator {
   async *streamChat(
     conversationId: string,
     message: string,
-    overrides?: { provider?: string; model?: string }
+    overrides?: { provider?: string; model?: string },
   ): AsyncGenerator<string, { messageId: string }, unknown> {
-    const conversation = this.getConversation(conversationId);
+    const db = this.ensureWorkspaceDb();
+    const conversation = db.conversations.findById(conversationId);
     if (!conversation) throw new Error(`Conversation not found: ${conversationId}`);
 
-    const session = this.getSession(conversation.session_id);
-    if (!session) throw new Error(`Session not found: ${conversation.session_id}`);
-
-    const agent = this.getAgent(session.id, conversationId);
+    const agent = this.getAgent(conversationId);
     const llmConfig = this.resolveLLMConfig(overrides);
     const maxTurns = this._config.maxTurns ?? this._configManager.getMaxTurns();
 
@@ -245,9 +208,9 @@ export class Orchestrator {
         yield chunk;
       }
 
-      const messages = this.db.messages.getLastMessages(conversationId, 1);
+      const messages = db.messages.getLastMessages(conversationId, 1);
       const lastMessage = messages[messages.length - 1];
-      this.db.conversations.update(conversationId, {});
+      db.conversations.update(conversationId, {});
 
       return { messageId: lastMessage?.id ?? "" };
     } finally {
@@ -259,10 +222,6 @@ export class Orchestrator {
   // Request cancellation
   // -----------------------------------------------------------------------
 
-  /**
-   * Cancel an active request for a conversation.
-   * Returns true if a request was found and aborted, false otherwise.
-   */
   cancelRequest(conversationId: string): boolean {
     const controller = this.activeRequests.get(conversationId);
     if (!controller) return false;
@@ -276,11 +235,11 @@ export class Orchestrator {
   // -----------------------------------------------------------------------
 
   getConversationHistory(conversationId: string, limit?: number) {
-    return this.db.messages.findByConversationId(conversationId, limit);
+    return this.ensureWorkspaceDb().messages.findByConversationId(conversationId, limit);
   }
 
   getRecentConversations(limit?: number) {
-    return this.db.conversations.getRecent(limit);
+    return this.ensureWorkspaceDb().conversations.getRecent(limit);
   }
 
   getActiveAgentsCount(): number {
@@ -296,15 +255,10 @@ export class Orchestrator {
   // -----------------------------------------------------------------------
 
   cleanup(): void {
-    // Abort all active requests
     for (const controller of this.activeRequests.values()) {
       controller.abort();
     }
     this.activeRequests.clear();
-
-    for (const sessionId of this.agents.keys()) {
-      this.endSession(sessionId);
-    }
     this.agents.clear();
   }
 }

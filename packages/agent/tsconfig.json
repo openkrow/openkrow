@@ -9,6 +9,7 @@
     "index.ts",
     "context",
     "personality",
+    "session",
     "skills",
     "state",
     "tools",

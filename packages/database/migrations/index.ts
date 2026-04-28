@@ -1,9 +1,11 @@
 /**
  * Database migrations system
+ *
+ * Migrations are run against a specific Database instance (not a global singleton).
  */
 
-import { getDatabase } from "../connection/index.js";
-import { SCHEMA } from "../schema/index.js";
+import type { Database } from "bun:sqlite";
+import { GLOBAL_SCHEMA, WORKSPACE_SCHEMA } from "../schema/index.js";
 import type { Migration } from "../types/index.js";
 
 export interface MigrationDefinition {
@@ -12,124 +14,68 @@ export interface MigrationDefinition {
   down?: string;
 }
 
-/**
- * Initial migration to create all base tables
- */
-const INITIAL_MIGRATION: MigrationDefinition = {
-  name: "001_initial_schema",
-  up: Object.values(SCHEMA).join("\n"),
-  down: `
-    DROP TABLE IF EXISTS messages;
-    DROP TABLE IF EXISTS conversations;
-    DROP TABLE IF EXISTS sessions;
-    DROP TABLE IF EXISTS settings;
-    DROP TABLE IF EXISTS users;
-  `,
-};
+// ---------------------------------------------------------------------------
+// Global DB migrations
+// ---------------------------------------------------------------------------
 
-/**
- * Migration 002: Expand messages table for rich message types
- * Adds tool_call_id, tool_name, is_error, metadata columns
- * and expands the role CHECK constraint to include tool, snip, summary
- */
-const EXPAND_MESSAGES_MIGRATION: MigrationDefinition = {
-  name: "002_expand_messages",
-  up: `
-    ALTER TABLE messages ADD COLUMN tool_call_id TEXT;
-    ALTER TABLE messages ADD COLUMN tool_name TEXT;
-    ALTER TABLE messages ADD COLUMN is_error INTEGER DEFAULT 0;
-    ALTER TABLE messages ADD COLUMN metadata TEXT;
+const GLOBAL_MIGRATIONS: MigrationDefinition[] = [
+  {
+    name: "001_global_settings",
+    up: Object.values(GLOBAL_SCHEMA).join("\n"),
+  },
+];
 
-    -- SQLite doesn't support ALTER CHECK directly, so we recreate the table
-    -- First create a new table with the updated constraint
-    CREATE TABLE messages_new (
-      id TEXT PRIMARY KEY,
-      conversation_id TEXT NOT NULL,
-      role TEXT NOT NULL CHECK(role IN ('user', 'assistant', 'system', 'tool', 'snip', 'summary')),
-      content TEXT NOT NULL,
-      tool_calls TEXT,
-      tool_call_id TEXT,
-      tool_name TEXT,
-      is_error INTEGER DEFAULT 0,
-      metadata TEXT,
-      created_at TEXT NOT NULL DEFAULT (datetime('now')),
-      FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE
+// ---------------------------------------------------------------------------
+// Workspace DB migrations
+// ---------------------------------------------------------------------------
+
+const WORKSPACE_MIGRATIONS: MigrationDefinition[] = [
+  {
+    name: "001_workspace_schema",
+    up: Object.values(WORKSPACE_SCHEMA).join("\n"),
+  },
+];
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+function ensureMigrationsTable(db: Database): void {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS migrations (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL UNIQUE,
+      applied_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
-
-    -- Copy existing data
-    INSERT INTO messages_new (id, conversation_id, role, content, tool_calls, created_at)
-    SELECT id, conversation_id, role, content, tool_calls, created_at FROM messages;
-
-    -- Swap tables
-    DROP TABLE messages;
-    ALTER TABLE messages_new RENAME TO messages;
-
-    -- Recreate indexes
-    CREATE INDEX IF NOT EXISTS idx_messages_conversation_id ON messages(conversation_id);
-    CREATE INDEX IF NOT EXISTS idx_messages_created_at ON messages(created_at);
-  `,
-};
-
-/**
- * All migrations in order
- */
-const MIGRATIONS: MigrationDefinition[] = [INITIAL_MIGRATION, EXPAND_MESSAGES_MIGRATION];
-
-/**
- * Get list of applied migrations
- */
-export function getAppliedMigrations(): Migration[] {
-  const db = getDatabase();
-
-  // Ensure migrations table exists
-  db.exec(SCHEMA.migrations);
-
-  const stmt = db.prepare("SELECT id, name, applied_at FROM migrations ORDER BY id");
-  return stmt.all() as Migration[];
+  `);
 }
 
-/**
- * Check if a migration has been applied
- */
-export function isMigrationApplied(name: string): boolean {
-  const db = getDatabase();
-
-  // Ensure migrations table exists
-  db.exec(SCHEMA.migrations);
-
+function isMigrationApplied(db: Database, name: string): boolean {
   const stmt = db.prepare("SELECT 1 FROM migrations WHERE name = ?");
-  const result = stmt.get(name);
-  return result !== null;
+  return stmt.get(name) !== null;
 }
 
-/**
- * Apply a single migration
- */
-export function applyMigration(migration: MigrationDefinition): void {
-  const db = getDatabase();
-
+function applyMigration(db: Database, migration: MigrationDefinition): void {
   db.transaction(() => {
-    // Execute migration SQL
     db.exec(migration.up);
-
-    // Record migration
     const stmt = db.prepare("INSERT INTO migrations (name) VALUES (?)");
     stmt.run(migration.name);
   })();
 }
 
-/**
- * Run all pending migrations
- */
-export function runMigrations(): { applied: string[]; skipped: string[] } {
+function runMigrationsOnDb(
+  db: Database,
+  migrations: MigrationDefinition[],
+): { applied: string[]; skipped: string[] } {
+  ensureMigrationsTable(db);
   const applied: string[] = [];
   const skipped: string[] = [];
 
-  for (const migration of MIGRATIONS) {
-    if (isMigrationApplied(migration.name)) {
+  for (const migration of migrations) {
+    if (isMigrationApplied(db, migration.name)) {
       skipped.push(migration.name);
     } else {
-      applyMigration(migration);
+      applyMigration(db, migration);
       applied.push(migration.name);
     }
   }
@@ -137,15 +83,40 @@ export function runMigrations(): { applied: string[]; skipped: string[] } {
   return { applied, skipped };
 }
 
+// ---------------------------------------------------------------------------
+// Public API
+// ---------------------------------------------------------------------------
+
 /**
- * Get the current migration version
+ * Run all pending global migrations on the given database.
  */
-export function getCurrentMigrationVersion(): string | null {
-  const migrations = getAppliedMigrations();
-  if (migrations.length === 0) {
-    return null;
-  }
-  return migrations[migrations.length - 1].name;
+export function runGlobalMigrations(db: Database): { applied: string[]; skipped: string[] } {
+  return runMigrationsOnDb(db, GLOBAL_MIGRATIONS);
 }
 
-export { MIGRATIONS };
+/**
+ * Run all pending workspace migrations on the given database.
+ */
+export function runWorkspaceMigrations(db: Database): { applied: string[]; skipped: string[] } {
+  return runMigrationsOnDb(db, WORKSPACE_MIGRATIONS);
+}
+
+/**
+ * Get list of applied migrations from a database.
+ */
+export function getAppliedMigrations(db: Database): Migration[] {
+  ensureMigrationsTable(db);
+  const stmt = db.prepare("SELECT id, name, applied_at FROM migrations ORDER BY id");
+  return stmt.all() as Migration[];
+}
+
+/**
+ * Get the current migration version from a database.
+ */
+export function getCurrentMigrationVersion(db: Database): string | null {
+  const migrations = getAppliedMigrations(db);
+  if (migrations.length === 0) return null;
+  return migrations[migrations.length - 1]!.name;
+}
+
+export { GLOBAL_MIGRATIONS, WORKSPACE_MIGRATIONS };
