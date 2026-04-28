@@ -142,7 +142,6 @@ export class OpenKrowServer {
                     const generator = handleStreamChat(
                       self.orchestrator,
                       chatRequest,
-                      self.workspacePath
                     );
 
                     for await (const chunk of generator) {
@@ -181,7 +180,6 @@ export class OpenKrowServer {
             const response = await handleChat(
               self.orchestrator,
               chatRequest,
-              self.workspacePath
             );
 
             return Response.json(response, { headers: corsHeaders });

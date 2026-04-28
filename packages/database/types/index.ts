@@ -1,9 +1,13 @@
 /**
  * Database type definitions
+ *
+ * Two client types:
+ * - GlobalDatabaseClient: settings only (global DB at ~/.openkrow/)
+ * - WorkspaceDatabaseClient: conversations + messages (per-workspace DB)
  */
 
 export interface DatabaseConfig {
-  /** Path to the database file (defaults to ~/.openkrow/database/openkrow.db) */
+  /** Path to the database file */
   path?: string;
   /** Enable WAL mode for better concurrent read/write performance */
   walMode?: boolean;
@@ -11,26 +15,8 @@ export interface DatabaseConfig {
   foreignKeys?: boolean;
 }
 
-export interface User {
-  id: string;
-  username: string;
-  email?: string;
-  created_at: string;
-  updated_at: string;
-}
-
-export interface Session {
-  id: string;
-  user_id: string;
-  workspace_path: string;
-  started_at: string;
-  ended_at?: string;
-  metadata?: string;
-}
-
 export interface Conversation {
   id: string;
-  session_id: string;
   title?: string;
   created_at: string;
   updated_at: string;
@@ -62,27 +48,10 @@ export interface Migration {
 }
 
 // ---------------------------------------------------------------------------
-// Repository interfaces (pure types — no runtime dependency on bun:sqlite)
+// Repository interfaces
 // ---------------------------------------------------------------------------
 
-export interface CreateUserInput {
-  username: string;
-  email?: string;
-}
-
-export interface UpdateUserInput {
-  username?: string;
-  email?: string;
-}
-
-export interface CreateSessionInput {
-  user_id: string;
-  workspace_path: string;
-  metadata?: Record<string, unknown>;
-}
-
 export interface CreateConversationInput {
-  session_id: string;
   title?: string;
 }
 
@@ -101,38 +70,13 @@ export interface CreateMessageInput {
   metadata?: Record<string, unknown>;
 }
 
-export interface IUserRepository {
-  findById(id: string): User | null;
-  findAll(limit?: number, offset?: number): User[];
-  deleteById(id: string): boolean;
-  count(): number;
-  create(input: CreateUserInput): User;
-  update(id: string, input: UpdateUserInput): User | null;
-  findByUsername(username: string): User | null;
-  findByEmail(email: string): User | null;
-  getOrCreateDefault(): User;
-}
-
-export interface ISessionRepository {
-  findById(id: string): Session | null;
-  findAll(limit?: number, offset?: number): Session[];
-  deleteById(id: string): boolean;
-  count(): number;
-  create(input: CreateSessionInput): Session;
-  endSession(id: string): Session | null;
-  findByUserId(userId: string, limit?: number): Session[];
-  findByWorkspace(workspacePath: string, limit?: number): Session[];
-  getActiveSession(userId: string): Session | null;
-}
-
 export interface IConversationRepository {
   findById(id: string): Conversation | null;
   findAll(limit?: number, offset?: number): Conversation[];
   deleteById(id: string): boolean;
   count(): number;
-  create(input: CreateConversationInput): Conversation;
+  create(input?: CreateConversationInput): Conversation;
   update(id: string, input: UpdateConversationInput): Conversation | null;
-  findBySessionId(sessionId: string, limit?: number): Conversation[];
   getRecent(limit?: number): Conversation[];
   searchByTitle(query: string, limit?: number): Conversation[];
 }
@@ -161,16 +105,23 @@ export interface ISettingsRepository {
   has(key: string): boolean;
 }
 
+// ---------------------------------------------------------------------------
+// Client interfaces
+// ---------------------------------------------------------------------------
+
 /**
- * DatabaseClient — the typed interface for all database operations.
- *
- * Created by `createDatabaseClient()`. Can be passed to agents and other
- * consumers without coupling them to the SQLite implementation.
+ * Global database client — settings only.
+ * Lives at ~/.openkrow/database/openkrow.db
  */
-export interface DatabaseClient {
-  users: IUserRepository;
-  sessions: ISessionRepository;
+export interface GlobalDatabaseClient {
+  settings: ISettingsRepository;
+}
+
+/**
+ * Per-workspace database client — conversations + messages.
+ * Lives at <workspace>/.krow/data.db
+ */
+export interface WorkspaceDatabaseClient {
   conversations: IConversationRepository;
   messages: IMessageRepository;
-  settings: ISettingsRepository;
 }

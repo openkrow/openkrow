@@ -1,47 +1,38 @@
 /**
- * @openkrow/database — SQLite database layer for user data
+ * @openkrow/database — SQLite database layer
  *
- * Uses Bun SQLite to store user data in ~/.openkrow/database
+ * Two database types:
+ * - Global: settings + migrations at ~/.openkrow/database/openkrow.db
+ * - Workspace: conversations + messages at <workspace>/.krow/data.db
  */
 
-import type { DatabaseConfig, DatabaseClient } from "./types/index.js";
-import { initializeDatabase as initDb } from "./connection/index.js";
-import { runMigrations as migrate } from "./migrations/index.js";
+import { join } from "path";
+import type { GlobalDatabaseClient, WorkspaceDatabaseClient, DatabaseConfig } from "./types/index.js";
+import { openDatabase, getDefaultDatabasePath } from "./connection/index.js";
+import { runGlobalMigrations, runWorkspaceMigrations } from "./migrations/index.js";
 import {
-  UserRepository as UserRepo,
-  SessionRepository as SessionRepo,
-  ConversationRepository as ConversationRepo,
-  MessageRepository as MessageRepo,
-  SettingsRepository as SettingsRepo,
+  ConversationRepository,
+  MessageRepository,
+  SettingsRepository,
 } from "./repositories/index.js";
 
-// Connection management
-export {
-  initializeDatabase,
-  getDatabase,
-  closeDatabase,
-  isDatabaseInitialized,
-  getDefaultDatabasePath,
-  transaction,
-} from "./connection/index.js";
-
-export type { DatabaseConfig, DatabaseClient } from "./types/index.js";
+// Connection
+export { openDatabase, getDefaultDatabasePath, Database } from "./connection/index.js";
+export type { DatabaseConfig } from "./types/index.js";
 
 // Schema
-export { SCHEMA, getTableNames, getTableSchema } from "./schema/index.js";
+export { GLOBAL_SCHEMA, WORKSPACE_SCHEMA, getTableNames } from "./schema/index.js";
 
 // Migrations
 export {
-  runMigrations,
+  runGlobalMigrations,
+  runWorkspaceMigrations,
   getAppliedMigrations,
-  isMigrationApplied,
   getCurrentMigrationVersion,
 } from "./migrations/index.js";
 
 // Repositories
 export {
-  UserRepository,
-  SessionRepository,
   ConversationRepository,
   MessageRepository,
   SettingsRepository,
@@ -49,48 +40,48 @@ export {
 
 // Types
 export type {
-  User,
-  Session,
+  GlobalDatabaseClient,
+  WorkspaceDatabaseClient,
   Conversation,
   Message,
   Setting,
   Migration,
-  // Repository interfaces
-  IUserRepository,
-  ISessionRepository,
   IConversationRepository,
   IMessageRepository,
   ISettingsRepository,
-  // Input types
-  CreateUserInput,
-  UpdateUserInput,
-  CreateSessionInput,
   CreateConversationInput,
   UpdateConversationInput,
   CreateMessageInput,
 } from "./types/index.js";
 
+// ---------------------------------------------------------------------------
+// Factory functions
+// ---------------------------------------------------------------------------
+
 /**
- * Initialize the database and run migrations
- * This is a convenience function that combines initialization and migration
+ * Create a global database client (settings only).
+ * Default path: ~/.openkrow/database/openkrow.db
  */
-export function setupDatabase(config?: DatabaseConfig): void {
-  initDb(config);
-  migrate();
+export function createGlobalClient(config?: DatabaseConfig): GlobalDatabaseClient {
+  const db = openDatabase(config);
+  runGlobalMigrations(db);
+
+  return {
+    settings: new SettingsRepository(db),
+  };
 }
 
 /**
- * Create a database instance with all repositories
+ * Create a workspace database client (conversations + messages).
+ * Path: <workspacePath>/.krow/data.db
  */
-export function createDatabaseClient(config?: DatabaseConfig): DatabaseClient {
-  initDb(config);
-  migrate();
+export function createWorkspaceClient(workspacePath: string): WorkspaceDatabaseClient {
+  const dbPath = join(workspacePath, ".krow", "data.db");
+  const db = openDatabase({ path: dbPath });
+  runWorkspaceMigrations(db);
 
   return {
-    users: new UserRepo(),
-    sessions: new SessionRepo(),
-    conversations: new ConversationRepo(),
-    messages: new MessageRepo(),
-    settings: new SettingsRepo(),
+    conversations: new ConversationRepository(db),
+    messages: new MessageRepository(db),
   };
 }

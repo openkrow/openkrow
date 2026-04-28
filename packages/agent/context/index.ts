@@ -19,7 +19,7 @@
  */
 
 import type { ContentPart } from "@openkrow/llm";
-import type { DatabaseClient } from "@openkrow/database";
+import type { WorkspaceDatabaseClient } from "@openkrow/database";
 import type { Message as DbMessage } from "@openkrow/database";
 
 import type {
@@ -61,7 +61,7 @@ const COLLAPSE_MIN_BLOCK_SIZE = 3;
 // ---------------------------------------------------------------------------
 
 export interface ContextManagerOptions {
-  database?: DatabaseClient;
+  database?: WorkspaceDatabaseClient;
   conversationId?: string;
   /** Optional summarizer for Phase 5 auto-compaction. Set via `setSummarizer()`. */
   summarizer?: SummarizerFn;
@@ -73,7 +73,7 @@ export class ContextManager {
   private messages: Message[] = [];
   private promptOptions: PromptAssemblyOptions = {};
   private customPromptOverride: string | undefined;
-  private database: DatabaseClient | undefined;
+  private database: WorkspaceDatabaseClient | undefined;
   private conversationId: string | undefined;
   private summarizer: SummarizerFn | undefined;
   private workspace: WorkspaceManager | undefined;

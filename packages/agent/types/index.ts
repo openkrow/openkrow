@@ -8,12 +8,12 @@ import type {
   ToolCallContent,
   KnownProvider,
 } from "@openkrow/llm";
-import type { DatabaseClient } from "@openkrow/database";
+import type { WorkspaceDatabaseClient } from "@openkrow/database";
 import type { SkillManager } from "@openkrow/skill";
 import type { QuestionHandler } from "../tools/question.js";
 import type { WorkspaceManager } from "@openkrow/workspace";
 
-export type { DatabaseClient } from "@openkrow/database";
+export type { WorkspaceDatabaseClient } from "@openkrow/database";
 export type { LLMConfig } from "@openkrow/llm";
 
 // ---------------------------------------------------------------------------
@@ -33,7 +33,7 @@ export interface AgentConfig {
   userName?: string;
   llm?: LLMConfig;
   /** Database client for persistence. When provided, the agent persists messages automatically. */
-  database?: DatabaseClient;
+  database?: WorkspaceDatabaseClient;
   /** Conversation ID to persist messages to. Required when database is provided. */
   conversationId?: string;
   /** Working directory for bash tool (defaults to process.cwd()) */

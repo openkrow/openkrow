@@ -424,10 +424,6 @@ export type {
 export { ContextManager } from "./context/index.js";
 export type { ContextManagerOptions } from "./context/index.js";
 export { PersonalityManager } from "./personality/index.js";
-export { SessionManager } from "./session/index.js";
-export { WorkspaceManager } from "@openkrow/workspace";
-export { SkillManager } from "@openkrow/skill";
-export type { Skill, SkillContent, SkillDefinition } from "@openkrow/skill";
 
 // Re-export types
 export type {
@@ -447,13 +443,10 @@ export type {
   ContextAssemblyOptions,
   ContextAssemblyResult,
   CompactionAction,
-  DatabaseClient,
+  WorkspaceDatabaseClient,
   SummarizerFn,
   LLMConfig,
 } from "./types/index.js";
-
-// Re-export workspace types
-export type { WorkspaceContext, Job, ScheduledTask } from "@openkrow/workspace";
 
 // Re-export token utilities
 export { estimateTokens, estimateMessageTokens, estimateTotalTokens } from "./context/index.js";

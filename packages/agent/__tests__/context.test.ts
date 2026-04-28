@@ -12,7 +12,7 @@ import type {
   ContextAssemblyOptions,
   SummarizerFn,
 } from "../types/index.js";
-import type { DatabaseClient, CreateMessageInput, Message as DbMessage } from "@openkrow/database";
+import type { WorkspaceDatabaseClient, CreateMessageInput, Message as DbMessage } from "@openkrow/database";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -359,7 +359,7 @@ describe("estimateTokens", () => {
 // Mock DatabaseClient for persistence tests
 // ---------------------------------------------------------------------------
 
-function createMockDatabaseClient(): { client: DatabaseClient; store: DbMessage[] } {
+function createMockDatabaseClient(): { client: WorkspaceDatabaseClient; store: DbMessage[] } {
   const store: DbMessage[] = [];
   let idCounter = 0;
 
@@ -395,10 +395,7 @@ function createMockDatabaseClient(): { client: DatabaseClient; store: DbMessage[
 
   const client = {
     messages: mockMessages,
-    users: {} as DatabaseClient["users"],
-    sessions: {} as DatabaseClient["sessions"],
-    conversations: {} as DatabaseClient["conversations"],
-    settings: {} as DatabaseClient["settings"],
+    conversations: {} as WorkspaceDatabaseClient["conversations"],
   };
 
   return { client, store };

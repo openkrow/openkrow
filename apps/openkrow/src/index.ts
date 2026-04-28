@@ -11,17 +11,6 @@
 
 export { VERSION } from "./version.js";
 
-// Config (re-export from @openkrow/config)
-export { ConfigManager } from "@openkrow/config";
-export type {
-  ModelConfig,
-  ModelOverrides,
-  ApiKeyEntry,
-  ApiKeyInfo,
-  OAuthEntry,
-  OAuthInfo,
-} from "@openkrow/config";
-
 // Server exports
 export { OpenKrowServer, startServer } from "./server/index.js";
 export type { OpenKrowServerOptions } from "./server/index.js";
