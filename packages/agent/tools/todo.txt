@@ -1,0 +1,9 @@
+Create and manage a structured task list for tracking progress.
+
+Usage:
+- Use this tool to plan, track, and organize tasks.
+- Each todo item has: content (description), status (pending, in_progress, completed, cancelled), and priority (high, medium, low).
+- Pass the complete updated todo list each time — this replaces the current list.
+- Only have ONE task as in_progress at a time. Complete existing tasks before starting new ones.
+- Mark tasks as completed immediately after finishing them.
+- Use this tool proactively when tasks require 3 or more steps.

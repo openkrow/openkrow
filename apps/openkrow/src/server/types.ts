@@ -29,6 +29,10 @@ export interface ChatRequest {
   sessionId?: string;
   /** Whether to stream the response */
   stream?: boolean;
+  /** Optional provider override for this request */
+  provider?: string;
+  /** Optional model override for this request */
+  model?: string;
 }
 
 export interface ChatResponse {
@@ -52,4 +56,46 @@ export interface HealthResponse {
   status: "ok" | "error";
   version: string;
   uptime: number;
+}
+
+// ---------------------------------------------------------------------------
+// Auth types
+// ---------------------------------------------------------------------------
+
+export interface ApiKeySetRequest {
+  /** Provider name (e.g. "anthropic", "openai", "google") */
+  provider: string;
+  /** The API key value */
+  apiKey: string;
+}
+
+export interface ApiKeyListResponse {
+  /** Provider names that have stored keys (values are masked) */
+  keys: Array<{ provider: string; masked: string }>;
+}
+
+// ---------------------------------------------------------------------------
+// Model config types
+// ---------------------------------------------------------------------------
+
+export interface ModelConfigResponse {
+  provider: string;
+  model: string;
+}
+
+export interface ModelConfigSetRequest {
+  provider: string;
+  model: string;
+}
+
+export interface ModelListResponse {
+  models: Array<{
+    id: string;
+    name: string;
+    provider: string;
+    contextWindow: number;
+    maxTokens: number;
+    supportsTools: boolean;
+  }>;
+  providers: string[];
 }

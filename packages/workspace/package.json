@@ -1,7 +1,7 @@
 {
-  "name": "@openkrow/tui",
+  "name": "@openkrow/workspace",
   "version": "0.1.0",
-  "description": "Terminal UI library with differential rendering",
+  "description": "Workspace management for OpenKrow — folder structure, context, jobs, templates, scripts",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -18,13 +18,9 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "chalk": "^5.4.1",
-    "strip-ansi": "^7.1.0",
-    "wrap-ansi": "^9.0.0",
-    "cli-spinners": "^3.2.0"
+    "bun-types": "^1.1.0"
   },
   "devDependencies": {
-    "@types/node": "^22.12.0",
     "typescript": "^5.7.0"
   }
 }

@@ -1,0 +1,9 @@
+Ask the user one or more questions to gather information, clarify requirements, or get decisions.
+
+Usage:
+- Each question has a header (short label), the question text, and a list of options.
+- Options have a label (1-5 words) and a description explaining the choice.
+- Set `multiple: true` to allow selecting more than one option.
+- By default, a "Type your own answer" option is added; don't include catch-all options.
+- Use this tool when you need to gather preferences, clarify ambiguity, or get decisions.
+- Answers are returned as arrays of selected option labels.

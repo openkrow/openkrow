@@ -1,0 +1,8 @@
+Search the web using DuckDuckGo and return results.
+
+Usage:
+- Provide a search query to find relevant web pages.
+- Returns titles, URLs, and snippets from search results.
+- Use numResults to control how many results are returned (default: 8).
+- Today's date is ${date}. Use date-qualified queries when searching for recent information.
+- For retrieving full page content from a specific URL, use the webfetch tool instead.

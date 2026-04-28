@@ -51,6 +51,12 @@ export interface PromptAssemblyOptions {
   userName?: string;
   /** Current date string for context */
   currentDate?: string;
+  /** Workspace context content (from context.md), appended as a dedicated section */
+  workspaceContext?: string;
+  /** Workspace path, shown in environment section */
+  workspacePath?: string;
+  /** Skills prompt snippet (available skills listing), injected before custom suffix */
+  skillsSnippet?: string;
 }
 
 /**
@@ -63,6 +69,9 @@ export function assembleSystemPrompt(options: PromptAssemblyOptions = {}): strin
     hasTools = false,
     customSuffix,
     userName,
+    workspaceContext,
+    workspacePath,
+    skillsSnippet,
     currentDate = new Date().toLocaleDateString("en-US", {
       weekday: "long",
       year: "numeric",
@@ -96,11 +105,22 @@ export function assembleSystemPrompt(options: PromptAssemblyOptions = {}): strin
   const envLines: string[] = [];
   if (userName) envLines.push(`The user's name is ${userName}.`);
   envLines.push(`Today's date is ${currentDate}.`);
+  if (workspacePath) envLines.push(`Workspace path: ${workspacePath}`);
   if (envLines.length > 0) {
     sections.push(`# Environment\n${envLines.join("\n")}`);
   }
 
-  // 5. Custom suffix
+  // 5. Workspace context (from context.md)
+  if (workspaceContext?.trim()) {
+    sections.push(`# Workspace Context\n${workspaceContext.trim()}`);
+  }
+
+  // 6. Skills listing
+  if (skillsSnippet?.trim()) {
+    sections.push(skillsSnippet.trim());
+  }
+
+  // 7. Custom suffix
   if (customSuffix?.trim()) {
     sections.push(customSuffix.trim());
   }

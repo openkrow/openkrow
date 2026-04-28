@@ -9,8 +9,12 @@ import type {
   KnownProvider,
 } from "@openkrow/llm";
 import type { DatabaseClient } from "@openkrow/database";
+import type { SkillManager } from "@openkrow/skill";
+import type { QuestionHandler } from "../tools/question.js";
+import type { WorkspaceManager } from "@openkrow/workspace";
 
 export type { DatabaseClient } from "@openkrow/database";
+export type { LLMConfig } from "@openkrow/llm";
 
 // ---------------------------------------------------------------------------
 // Agent Configuration
@@ -32,8 +36,31 @@ export interface AgentConfig {
   database?: DatabaseClient;
   /** Conversation ID to persist messages to. Required when database is provided. */
   conversationId?: string;
+  /** Working directory for bash tool (defaults to process.cwd()) */
+  cwd?: string;
+  /** SkillManager instance — enables the skill tool when provided */
+  skillManager?: SkillManager;
+  /** Question handler callback — enables the question tool when provided */
+  questionHandler?: QuestionHandler;
+  /** WorkspaceManager instance — context.md is injected into every LLM call */
+  workspace?: WorkspaceManager;
+}
+
+// ---------------------------------------------------------------------------
+// Per-request run options
+// ---------------------------------------------------------------------------
+
+/**
+ * Options passed to `run()` and `stream()` per-call.
+ * LLM config here overrides the `AgentConfig.llm` fallback.
+ */
+export interface RunOptions {
+  /** Abort signal for cancellation */
+  signal?: AbortSignal;
+  /** Per-request LLM configuration (provider, model, apiKey, etc.) */
+  llm?: LLMConfig;
+  /** Safety net: maximum turns before forcibly stopping the loop. No default — runs until done. */
   maxTurns?: number;
-  maxToolCallsPerTurn?: number;
 }
 
 // ---------------------------------------------------------------------------

@@ -15,15 +15,23 @@ import {
   type ServerConfig,
   type HealthResponse,
   type ErrorResponse,
+  type ApiKeySetRequest,
+  type ApiKeyListResponse,
+  type ModelConfigResponse,
+  type ModelConfigSetRequest,
+  type ModelListResponse,
 } from "./types.js";
 import { VERSION } from "../version.js";
 
+/** Helper accessor for the ConfigManager through the orchestrator. */
+const cm = (o: Orchestrator) => o.configManager;
+
 export interface OpenKrowServerOptions {
   config?: Partial<ServerConfig>;
+  /** Workspace directory path */
   workspacePath?: string;
-  apiKey?: string;
-  provider?: "openai" | "anthropic" | "google";
-  model?: string;
+  /** API key to secure the server. All requests must include this in the Authorization header. In-memory only. */
+  serverApiKey?: string;
 }
 
 /**
@@ -34,20 +42,17 @@ export class OpenKrowServer {
   private orchestrator: Orchestrator;
   private config: ServerConfig;
   private workspacePath: string;
+  private serverApiKey: string | undefined;
   private startTime: number = Date.now();
 
   constructor(options: OpenKrowServerOptions = {}) {
     this.config = { ...DEFAULT_SERVER_CONFIG, ...options.config };
     this.workspacePath = options.workspacePath ?? process.cwd();
+    this.serverApiKey = options.serverApiKey;
 
-    // Initialize orchestrator
+    // Initialize orchestrator — LLM config is resolved from ConfigManager at runtime
     this.orchestrator = Orchestrator.create({
-      llm: {
-        provider: options.provider ?? "anthropic",
-        model: options.model ?? "claude-sonnet-4-20250514",
-        apiKey: options.apiKey ?? process.env.ANTHROPIC_API_KEY ?? process.env.OPENAI_API_KEY,
-      },
-      enableTools: true,
+      workspacePath: this.workspacePath,
     });
   }
 
@@ -80,7 +85,7 @@ export class OpenKrowServer {
         }
 
         try {
-          // Health endpoint
+          // Health endpoint (no auth required)
           if (path === "/health" || path === `${self.config.apiPrefix}/health`) {
             const health: HealthResponse = {
               status: "ok",
@@ -88,6 +93,21 @@ export class OpenKrowServer {
               uptime: Date.now() - self.startTime,
             };
             return Response.json(health, { headers: corsHeaders });
+          }
+
+          // --- Auth gate: all other routes require the server API key ---
+          if (self.serverApiKey) {
+            const authHeader = req.headers.get("authorization");
+            const token = authHeader?.startsWith("Bearer ")
+              ? authHeader.slice(7)
+              : null;
+
+            if (token !== self.serverApiKey) {
+              return Response.json(
+                { error: "Unauthorized", code: "UNAUTHORIZED" } as ErrorResponse,
+                { status: 401, headers: corsHeaders }
+              );
+            }
           }
 
           // Chat endpoint
@@ -167,6 +187,41 @@ export class OpenKrowServer {
             return Response.json(response, { headers: corsHeaders });
           }
 
+          // Cancel endpoint
+          if (
+            path === "/chat/cancel" ||
+            path === `${self.config.apiPrefix}/chat/cancel`
+          ) {
+            if (req.method !== "POST") {
+              return Response.json(
+                { error: "Method not allowed", code: "METHOD_NOT_ALLOWED" } as ErrorResponse,
+                { status: 405, headers: corsHeaders }
+              );
+            }
+
+            const body = await req.json().catch(() => null);
+            if (
+              !body ||
+              typeof body !== "object" ||
+              !("conversationId" in body) ||
+              typeof (body as { conversationId: string }).conversationId !== "string"
+            ) {
+              return Response.json(
+                { error: "conversationId is required", code: "INVALID_BODY" } as ErrorResponse,
+                { status: 400, headers: corsHeaders }
+              );
+            }
+
+            const cancelled = self.orchestrator.cancelRequest(
+              (body as { conversationId: string }).conversationId
+            );
+
+            return Response.json(
+              { ok: true, cancelled },
+              { headers: corsHeaders }
+            );
+          }
+
           // Conversations list endpoint
           if (
             path === "/conversations" ||
@@ -202,6 +257,115 @@ export class OpenKrowServer {
             return Response.json({ messages }, { headers: corsHeaders });
           }
 
+          // ---------------------------------------------------------------
+          // Auth: API Key management
+          // ---------------------------------------------------------------
+
+          // GET /auth/keys — list stored API keys (masked)
+          if (
+            (path === "/auth/keys" || path === `${self.config.apiPrefix}/auth/keys`) &&
+            req.method === "GET"
+          ) {
+            const keys = cm(self.orchestrator).listApiKeys();
+            return Response.json({ keys } as ApiKeyListResponse, { headers: corsHeaders });
+          }
+
+          // POST /auth/keys — store an API key for a provider
+          if (
+            (path === "/auth/keys" || path === `${self.config.apiPrefix}/auth/keys`) &&
+            req.method === "POST"
+          ) {
+            const body = await req.json().catch(() => null);
+            if (
+              !body ||
+              typeof body !== "object" ||
+              !("provider" in body) ||
+              !("apiKey" in body) ||
+              typeof (body as ApiKeySetRequest).provider !== "string" ||
+              typeof (body as ApiKeySetRequest).apiKey !== "string"
+            ) {
+              return Response.json(
+                { error: "provider and apiKey are required strings", code: "INVALID_BODY" } as ErrorResponse,
+                { status: 400, headers: corsHeaders }
+              );
+            }
+            const { provider: prov, apiKey: key } = body as ApiKeySetRequest;
+            cm(self.orchestrator).setApiKey(prov, key);
+            return Response.json({ ok: true, provider: prov }, { headers: corsHeaders });
+          }
+
+          // DELETE /auth/keys/:provider — remove an API key
+          const deleteKeyMatch = path.match(/^(?:\/api)?\/auth\/keys\/([^/]+)$/);
+          if (deleteKeyMatch && req.method === "DELETE") {
+            const provider = deleteKeyMatch[1];
+            const deleted = cm(self.orchestrator).removeApiKey(provider);
+            if (!deleted) {
+              return Response.json(
+                { error: `No API key stored for provider: ${provider}`, code: "NOT_FOUND" } as ErrorResponse,
+                { status: 404, headers: corsHeaders }
+              );
+            }
+            return Response.json({ ok: true, provider }, { headers: corsHeaders });
+          }
+
+          // ---------------------------------------------------------------
+          // Model configuration
+          // ---------------------------------------------------------------
+
+          // GET /models — list all available models
+          if (
+            (path === "/models" || path === `${self.config.apiPrefix}/models`) &&
+            req.method === "GET"
+          ) {
+            const allModels = cm(self.orchestrator).listModels();
+            const providers = cm(self.orchestrator).listProviders();
+            const response: ModelListResponse = {
+              models: allModels.map((m: { id: string; name: string; provider: string; contextWindow: number; maxTokens: number; supportsTools: boolean }) => ({
+                id: m.id,
+                name: m.name,
+                provider: m.provider,
+                contextWindow: m.contextWindow,
+                maxTokens: m.maxTokens,
+                supportsTools: m.supportsTools,
+              })),
+              providers: providers as string[],
+            };
+            return Response.json(response, { headers: corsHeaders });
+          }
+
+          // GET /config/model — get current model config
+          if (
+            (path === "/config/model" || path === `${self.config.apiPrefix}/config/model`) &&
+            req.method === "GET"
+          ) {
+            const active = cm(self.orchestrator).getActiveModel();
+            return Response.json(active as ModelConfigResponse, { headers: corsHeaders });
+          }
+
+          // POST /config/model — set current model config
+          if (
+            (path === "/config/model" || path === `${self.config.apiPrefix}/config/model`) &&
+            req.method === "POST"
+          ) {
+            const body = await req.json().catch(() => null);
+            if (
+              !body ||
+              typeof body !== "object" ||
+              !("provider" in body) ||
+              !("model" in body) ||
+              typeof (body as ModelConfigSetRequest).provider !== "string" ||
+              typeof (body as ModelConfigSetRequest).model !== "string"
+            ) {
+              return Response.json(
+                { error: "provider and model are required strings", code: "INVALID_BODY" } as ErrorResponse,
+                { status: 400, headers: corsHeaders }
+              );
+            }
+            const { provider: prov, model: mod } = body as ModelConfigSetRequest;
+            cm(self.orchestrator).setActiveModel({ provider: prov as any, model: mod });
+            return Response.json({ ok: true, provider: prov, model: mod }, { headers: corsHeaders });
+          }
+
           // 404 for unknown routes
           return Response.json(
             { error: "Not found", code: "NOT_FOUND" } as ErrorResponse,
@@ -220,11 +384,19 @@ export class OpenKrowServer {
 
     console.log(`OpenKrow server started on http://${this.config.host}:${this.config.port}`);
     console.log(`Workspace: ${this.workspacePath}`);
+    console.log(`Auth: ${this.serverApiKey ? "enabled (Bearer token required)" : "disabled"}`);
     console.log(`\nEndpoints:`);
-    console.log(`  POST /chat - Send a message to the agent`);
-    console.log(`  GET  /health - Health check`);
-    console.log(`  GET  /conversations - List recent conversations`);
-    console.log(`  GET  /conversations/:id/messages - Get conversation history`);
+    console.log(`  GET  /health                       - Health check (no auth)`);
+    console.log(`  POST /chat                         - Send a message`);
+    console.log(`  POST /chat/cancel                  - Cancel active request`);
+    console.log(`  GET  /conversations                - List conversations`);
+    console.log(`  GET  /conversations/:id/messages    - Conversation history`);
+    console.log(`  GET  /auth/keys                    - List stored API keys`);
+    console.log(`  POST /auth/keys                    - Store an API key`);
+    console.log(`  DELETE /auth/keys/:provider         - Remove an API key`);
+    console.log(`  GET  /models                       - List available models`);
+    console.log(`  GET  /config/model                 - Get current model`);
+    console.log(`  POST /config/model                 - Set current model`);
 
     return this.server;
   }

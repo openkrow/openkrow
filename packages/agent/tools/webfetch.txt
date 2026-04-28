@@ -1,0 +1,9 @@
+Fetch content from a specified URL and return it in the requested format.
+
+Usage:
+- The URL must be a fully-formed valid URL starting with http:// or https://.
+- Format options: "markdown" (default), "text", or "html".
+- HTML content is automatically converted to markdown by default.
+- Results may be truncated if the content is very large.
+- This tool is read-only and does not modify any files.
+- Use this when you need to retrieve and analyze web content.

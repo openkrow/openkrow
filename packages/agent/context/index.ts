@@ -44,6 +44,7 @@ import {
 } from "./tokens.js";
 
 import { assembleSystemPrompt, type PromptAssemblyOptions } from "./prompt.js";
+import type { WorkspaceManager } from "@openkrow/workspace";
 
 // ---------------------------------------------------------------------------
 // Defaults
@@ -64,6 +65,8 @@ export interface ContextManagerOptions {
   conversationId?: string;
   /** Optional summarizer for Phase 5 auto-compaction. Set via `setSummarizer()`. */
   summarizer?: SummarizerFn;
+  /** Optional WorkspaceManager — context.md is injected into the system prompt */
+  workspace?: WorkspaceManager;
 }
 
 export class ContextManager {
@@ -73,11 +76,13 @@ export class ContextManager {
   private database: DatabaseClient | undefined;
   private conversationId: string | undefined;
   private summarizer: SummarizerFn | undefined;
+  private workspace: WorkspaceManager | undefined;
 
   constructor(options?: ContextManagerOptions) {
     this.database = options?.database;
     this.conversationId = options?.conversationId;
     this.summarizer = options?.summarizer;
+    this.workspace = options?.workspace;
   }
 
   // ---- Persistence configuration ----
@@ -89,6 +94,7 @@ export class ContextManager {
     if (options.database !== undefined) this.database = options.database;
     if (options.conversationId !== undefined) this.conversationId = options.conversationId;
     if (options.summarizer !== undefined) this.summarizer = options.summarizer;
+    if (options.workspace !== undefined) this.workspace = options.workspace;
   }
 
   get isPersistedMode(): boolean {
@@ -105,6 +111,16 @@ export class ContextManager {
     this.summarizer = fn;
   }
 
+  // ---- Workspace ----
+
+  /**
+   * Set or replace the WorkspaceManager. Its context.md content will be
+   * refreshed and appended to the system prompt on every LLM call.
+   */
+  setWorkspace(workspace: WorkspaceManager | undefined): void {
+    this.workspace = workspace;
+  }
+
   // ---- Prompt management ----
 
   configurePrompt(options: PromptAssemblyOptions): void {
@@ -117,7 +133,19 @@ export class ContextManager {
 
   getSystemPrompt(): string {
     if (this.customPromptOverride !== undefined) return this.customPromptOverride;
-    return assembleSystemPrompt(this.promptOptions);
+
+    // Refresh workspace context from disk before each assembly
+    const opts = { ...this.promptOptions };
+    if (this.workspace?.isLoaded()) {
+      this.workspace.refreshContext();
+      const ctx = this.workspace.getContext();
+      if (ctx) {
+        opts.workspaceContext = ctx.contextMd;
+        opts.workspacePath = ctx.path;
+      }
+    }
+
+    return assembleSystemPrompt(opts);
   }
 
   // ---- Message management ----

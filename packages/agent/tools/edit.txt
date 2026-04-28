@@ -1,0 +1,10 @@
+Perform exact string replacements in files.
+
+Usage:
+- The edit will FAIL if `oldString` is not found in the file.
+- The edit will FAIL if `oldString` is found multiple times and `replaceAll` is not set.
+  Provide more surrounding context to make the match unique, or use `replaceAll` to change every instance.
+- `oldString` must match the file content exactly, including whitespace and indentation.
+- `newString` must be different from `oldString`.
+- Use `replaceAll: true` for renaming variables or strings across the entire file.
+- For creating new files or replacing entire content, prefer the write tool instead.

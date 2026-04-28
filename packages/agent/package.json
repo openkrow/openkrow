@@ -12,7 +12,7 @@
     }
   },
   "scripts": {
-    "build": "tsc && cp -r context/prompt dist/context/prompt",
+    "build": "tsc && cp -r context/prompt dist/context/prompt && cp tools/*.txt dist/tools/",
     "dev": "tsc --watch",
     "clean": "rm -rf dist",
     "typecheck": "tsc --noEmit",
@@ -21,6 +21,9 @@
   "dependencies": {
     "@openkrow/database": "*",
     "@openkrow/llm": "*",
+    "@openkrow/skill": "*",
+    "@openkrow/workspace": "*",
+    "bun-types": "^1.1.0",
     "eventemitter3": "^5.0.1"
   },
   "devDependencies": {

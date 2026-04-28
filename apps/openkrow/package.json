@@ -1,13 +1,10 @@
 {
   "name": "@openkrow/app",
   "version": "0.1.0",
-  "description": "OpenKrow - Open-source terminal AI coding assistant. Main entry point.",
+  "description": "OpenKrow - Open-source AI assistant. Assembles all packages and exposes the HTTP API.",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
-  "bin": {
-    "openkrow": "./dist/cli.js"
-  },
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
@@ -17,19 +14,16 @@
   "scripts": {
     "build": "tsc",
     "dev": "tsc --watch",
-    "start": "node dist/cli.js",
-    "start:server": "bun run dist/server/index.js",
+    "start": "bun run dist/index.js",
     "clean": "rm -rf dist",
-    "typecheck": "tsc --noEmit",
-    "test": "node --test dist/__tests__/*.test.js"
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@openkrow/llm": "*",
     "@openkrow/agent": "*",
-    "@openkrow/database": "*",
-    "@openkrow/tui": "*",
-    "commander": "^13.1.0",
-    "glob": "^11.0.1"
+    "@openkrow/config": "*",
+    "@openkrow/workspace": "*",
+    "@openkrow/database": "*"
   },
   "devDependencies": {
     "@types/node": "^22.12.0",

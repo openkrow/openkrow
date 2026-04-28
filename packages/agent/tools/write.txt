@@ -1,0 +1,8 @@
+Write content to a file on the local filesystem.
+
+Usage:
+- The filePath parameter must be an absolute path.
+- This tool will overwrite the existing file if there is one at the provided path.
+- If the parent directory does not exist, it will be created automatically.
+- Use this tool to create new files or completely replace existing file content.
+- For partial modifications (replacing specific text), prefer the edit tool instead.

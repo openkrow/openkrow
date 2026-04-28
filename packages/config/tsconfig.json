@@ -5,14 +5,5 @@
     "rootDir": ".",
     "types": ["bun-types"]
   },
-  "include": [
-    "index.ts",
-    "context",
-    "personality",
-    "skills",
-    "state",
-    "tools",
-    "types",
-    "__tests__"
-  ]
+  "include": ["src"]
 }

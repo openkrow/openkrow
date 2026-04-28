@@ -31,8 +31,13 @@ export async function handleChat(
     conversationId = conversation.id;
   }
 
+  // Build model/provider overrides from request
+  const overrides = (request.provider || request.model)
+    ? { provider: request.provider, model: request.model }
+    : undefined;
+
   // Run chat
-  const result = await orchestrator.chat(conversationId, request.message);
+  const result = await orchestrator.chat(conversationId, request.message, overrides);
 
   return {
     response: result.response,
@@ -64,8 +69,13 @@ export async function* handleStreamChat(
     conversationId = conversation.id;
   }
 
+  // Build model/provider overrides from request
+  const overrides = (request.provider || request.model)
+    ? { provider: request.provider, model: request.model }
+    : undefined;
+
   // Stream chat
-  const generator = orchestrator.streamChat(conversationId, request.message);
+  const generator = orchestrator.streamChat(conversationId, request.message, overrides);
   let result: { messageId: string } | undefined;
 
   while (true) {
@@ -134,6 +144,8 @@ export function validateChatRequest(body: unknown): {
       conversationId: typeof data.conversationId === "string" ? data.conversationId : undefined,
       sessionId: typeof data.sessionId === "string" ? data.sessionId : undefined,
       stream: typeof data.stream === "boolean" ? data.stream : false,
+      provider: typeof data.provider === "string" ? data.provider : undefined,
+      model: typeof data.model === "string" ? data.model : undefined,
     },
   };
 }
