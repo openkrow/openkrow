@@ -18,7 +18,8 @@
  * IMPORTANT: The original messages are NEVER mutated during assembly.
  */
 
-import type { ContentPart } from "@openkrow/llm";
+import type { TextContent, ThinkingContent, ToolCall } from "@mariozechner/pi-ai";
+import type { AssistantContentPart } from "../types/index.js";
 import type { WorkspaceDatabaseClient } from "@openkrow/database";
 import type { Message as DbMessage } from "@openkrow/database";
 
@@ -312,15 +313,15 @@ export class ContextManager {
       case "assistant": {
         const textParts = msg.content.filter(p => p.type === "text");
         const textContent = textParts.map(p => (p as { type: "text"; text: string }).text).join("\n");
-        const toolCallParts = msg.content.filter(p => p.type === "tool_call");
+        const toolCallParts = msg.content.filter(p => p.type === "toolCall");
         db.messages.create({
           conversation_id: conversationId,
           role: "assistant",
           content: textContent,
           tool_calls: toolCallParts.length > 0
             ? toolCallParts.map(p => {
-                const tc = p as { type: "tool_call"; id: string; name: string; arguments: string };
-                return { id: tc.id, name: tc.name, arguments: tc.arguments };
+                const tc = p as { type: "toolCall"; id: string; name: string; arguments: Record<string, unknown> };
+                return { id: tc.id, name: tc.name, arguments: JSON.stringify(tc.arguments) };
               })
             : undefined,
         });
@@ -381,7 +382,7 @@ export class ContextManager {
         return { role: "user", content: row.content, timestamp } satisfies UserMessage;
 
       case "assistant": {
-        const parts: ContentPart[] = [];
+        const parts: AssistantContentPart[] = [];
         if (row.content) {
           parts.push({ type: "text", text: row.content });
         }
@@ -389,7 +390,7 @@ export class ContextManager {
           try {
             const calls = JSON.parse(row.tool_calls) as Array<{ id: string; name: string; arguments: string }>;
             for (const tc of calls) {
-              parts.push({ type: "tool_call", id: tc.id, name: tc.name, arguments: tc.arguments });
+              parts.push({ type: "toolCall", id: tc.id, name: tc.name, arguments: JSON.parse(tc.arguments) });
             }
           } catch {
             // Ignore malformed tool_calls

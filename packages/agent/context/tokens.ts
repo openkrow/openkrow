@@ -7,9 +7,14 @@
  */
 
 import type {
-  ContentPart,
-} from "@openkrow/llm";
+  TextContent,
+  ThinkingContent,
+  ToolCall,
+  ImageContent,
+} from "@mariozechner/pi-ai";
 import type {
+  AssistantContentPart,
+  UserContentPart,
   Message,
   SendableMessage,
   ToolDefinition,
@@ -20,15 +25,24 @@ export function estimateTokens(text: string): number {
   return Math.ceil(text.length / 4);
 }
 
-/** Estimate tokens for a ContentPart */
-function estimateContentPartTokens(part: ContentPart): number {
+/** Estimate tokens for an assistant content part */
+function estimateAssistantContentPartTokens(part: AssistantContentPart): number {
   switch (part.type) {
     case "text":
-    case "thinking":
       return estimateTokens(part.text);
-    case "tool_call":
+    case "thinking":
+      return estimateTokens(part.thinking);
+    case "toolCall":
       // name + JSON args
-      return estimateTokens(part.name) + estimateTokens(part.arguments) + 10;
+      return estimateTokens(part.name) + estimateTokens(JSON.stringify(part.arguments)) + 10;
+  }
+}
+
+/** Estimate tokens for a user content part */
+function estimateUserContentPartTokens(part: UserContentPart): number {
+  switch (part.type) {
+    case "text":
+      return estimateTokens(part.text);
     case "image":
       // Images are typically ~1000 tokens for a medium image
       return 1000;
@@ -45,10 +59,10 @@ export function estimateMessageTokens(msg: Message): number {
       if (typeof msg.content === "string") {
         return overhead + estimateTokens(msg.content);
       }
-      return overhead + msg.content.reduce((sum, p) => sum + estimateContentPartTokens(p), 0);
+      return overhead + msg.content.reduce((sum, p) => sum + estimateUserContentPartTokens(p), 0);
     }
     case "assistant": {
-      return overhead + msg.content.reduce((sum, p) => sum + estimateContentPartTokens(p), 0);
+      return overhead + msg.content.reduce((sum, p) => sum + estimateAssistantContentPartTokens(p), 0);
     }
     case "tool": {
       return overhead + estimateTokens(msg.content) + estimateTokens(msg.toolCallId) + 5;

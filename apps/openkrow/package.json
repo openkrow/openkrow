@@ -19,7 +19,6 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@openkrow/llm": "*",
     "@openkrow/agent": "*",
     "@openkrow/config": "*",
     "@openkrow/workspace": "*",

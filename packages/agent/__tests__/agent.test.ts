@@ -1,7 +1,7 @@
 /**
  * Tests for the Agent agentic loop (run/stream with LLM calls and tool execution).
  *
- * These tests mock the @openkrow/llm stream/complete functions to test the
+ * These tests mock the @mariozechner/pi-ai stream/complete functions to test the
  * agent's loop logic without making real API calls.
  */
 
@@ -10,9 +10,9 @@ import assert from "node:assert/strict";
 import { Agent, ToolRegistry } from "../index.js";
 import type { AgentConfig, Tool } from "../types/index.js";
 import type {
-  AssistantMessage as LLMAssistantMessage,
-  StreamEvent,
-} from "@openkrow/llm";
+  AssistantMessage as PiAiAssistantMessage,
+  AssistantMessageEvent,
+} from "@mariozechner/pi-ai";
 import { toLLMMessage, toLLMMessages, extractToolCalls, hasToolCalls } from "../context/convert.js";
 
 // ---------------------------------------------------------------------------
@@ -20,11 +20,12 @@ import { toLLMMessage, toLLMMessages, extractToolCalls, hasToolCalls } from "../
 // ---------------------------------------------------------------------------
 
 describe("Message conversion", () => {
-  it("should convert user message to LLM format (strip timestamp)", () => {
+  it("should convert user message to LLM format", () => {
     const agentMsg = { role: "user" as const, content: "hello", timestamp: 123 };
     const llmMsg = toLLMMessage(agentMsg);
-    assert.deepStrictEqual(llmMsg, { role: "user", content: "hello" });
-    assert.strictEqual((llmMsg as any).timestamp, undefined);
+    assert.strictEqual(llmMsg.role, "user");
+    assert.strictEqual((llmMsg as any).content, "hello");
+    assert.strictEqual((llmMsg as any).timestamp, 123);
   });
 
   it("should convert assistant message to LLM format", () => {
@@ -34,7 +35,8 @@ describe("Message conversion", () => {
       timestamp: 123,
     };
     const llmMsg = toLLMMessage(agentMsg);
-    assert.deepStrictEqual(llmMsg, { role: "assistant", content: [{ type: "text", text: "hi" }] });
+    assert.strictEqual(llmMsg.role, "assistant");
+    assert.deepStrictEqual((llmMsg as any).content, [{ type: "text", text: "hi" }]);
   });
 
   it("should convert tool result message to LLM format", () => {
@@ -47,13 +49,11 @@ describe("Message conversion", () => {
       timestamp: 123,
     };
     const llmMsg = toLLMMessage(agentMsg);
-    assert.deepStrictEqual(llmMsg, {
-      role: "tool",
-      toolCallId: "tc_1",
-      content: "file contents",
-      isError: false,
-    });
-    assert.strictEqual((llmMsg as any).toolName, undefined);
+    assert.strictEqual(llmMsg.role, "toolResult");
+    assert.strictEqual((llmMsg as any).toolCallId, "tc_1");
+    assert.strictEqual((llmMsg as any).toolName, "read_file");
+    assert.deepStrictEqual((llmMsg as any).content, [{ type: "text", text: "file contents" }]);
+    assert.strictEqual((llmMsg as any).isError, false);
   });
 
   it("should convert array of messages", () => {
@@ -63,17 +63,22 @@ describe("Message conversion", () => {
     ];
     const llmMsgs = toLLMMessages(msgs);
     assert.strictEqual(llmMsgs.length, 2);
-    assert.strictEqual((llmMsgs[0] as any).timestamp, undefined);
   });
 
   it("should extract tool calls from assistant message", () => {
-    const msg: LLMAssistantMessage = {
+    const msg: PiAiAssistantMessage = {
       role: "assistant",
       content: [
         { type: "text", text: "Let me read that file" },
-        { type: "tool_call", id: "tc_1", name: "read_file", arguments: '{"path":"foo.txt"}' },
-        { type: "tool_call", id: "tc_2", name: "bash", arguments: '{"cmd":"ls"}' },
+        { type: "toolCall", id: "tc_1", name: "read_file", arguments: { path: "foo.txt" } },
+        { type: "toolCall", id: "tc_2", name: "bash", arguments: { cmd: "ls" } },
       ],
+      api: "" as any,
+      provider: "" as any,
+      model: "",
+      usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } },
+      stopReason: "toolUse",
+      timestamp: Date.now(),
     };
     const calls = extractToolCalls(msg);
     assert.strictEqual(calls.length, 2);
@@ -82,13 +87,25 @@ describe("Message conversion", () => {
   });
 
   it("should detect tool calls", () => {
-    const withTools: LLMAssistantMessage = {
+    const withTools: PiAiAssistantMessage = {
       role: "assistant",
-      content: [{ type: "tool_call", id: "tc_1", name: "bash", arguments: "{}" }],
+      content: [{ type: "toolCall", id: "tc_1", name: "bash", arguments: {} }],
+      api: "" as any,
+      provider: "" as any,
+      model: "",
+      usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } },
+      stopReason: "toolUse",
+      timestamp: Date.now(),
     };
-    const withoutTools: LLMAssistantMessage = {
+    const withoutTools: PiAiAssistantMessage = {
       role: "assistant",
       content: [{ type: "text", text: "done" }],
+      api: "" as any,
+      provider: "" as any,
+      model: "",
+      usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } },
+      stopReason: "stop",
+      timestamp: Date.now(),
     };
     assert.strictEqual(hasToolCalls(withTools), true);
     assert.strictEqual(hasToolCalls(withoutTools), false);

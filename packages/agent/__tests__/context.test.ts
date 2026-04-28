@@ -426,7 +426,7 @@ describe("ContextManager — persistence", () => {
       role: "assistant",
       content: [
         { type: "text", text: "Let me read that file" },
-        { type: "tool_call", id: "tc_1", name: "read_file", arguments: '{"path":"foo.txt"}' },
+        { type: "toolCall", id: "tc_1", name: "read_file", arguments: { path: "foo.txt" } },
       ],
     };
     cm.addMessage(msg);

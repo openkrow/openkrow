@@ -2,7 +2,7 @@
  * @openkrow/config — Type definitions
  */
 
-import type { KnownProvider } from "@openkrow/llm";
+import type { KnownProvider } from "@mariozechner/pi-ai";
 
 // ---------------------------------------------------------------------------
 // Model configuration

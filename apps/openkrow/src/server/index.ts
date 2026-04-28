@@ -318,13 +318,13 @@ export class OpenKrowServer {
             const allModels = cm(self.orchestrator).listModels();
             const providers = cm(self.orchestrator).listProviders();
             const response: ModelListResponse = {
-              models: allModels.map((m: { id: string; name: string; provider: string; contextWindow: number; maxTokens: number; supportsTools: boolean }) => ({
+              models: allModels.map((m: { id: string; name: string; provider: string; contextWindow: number; maxTokens: number; reasoning: boolean }) => ({
                 id: m.id,
                 name: m.name,
                 provider: m.provider,
                 contextWindow: m.contextWindow,
                 maxTokens: m.maxTokens,
-                supportsTools: m.supportsTools,
+                reasoning: m.reasoning,
               })),
               providers: providers as string[],
             };

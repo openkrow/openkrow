@@ -3,29 +3,32 @@
  *
  * Core agent class with async generator support for streaming responses.
  * Implements the query loop: context assembly → LLM call → observe content
- * for tool_use blocks (needsFollowUp) → tool execution → repeat until done.
+ * for toolCall blocks (needsFollowUp) → tool execution → repeat until done.
  */
 
 import { EventEmitter } from "eventemitter3";
 import {
-  stream as llmStream,
-  complete as llmComplete,
-  getTextContent,
-  getModelById,
-  LLMConfig
-} from "@openkrow/llm";
+  stream as piAiStream,
+  complete as piAiComplete,
+  getModel,
+  getModels,
+  getProviders,
+} from "@mariozechner/pi-ai";
 import type {
   Model,
-  Context as LLMContext,
-  StreamOptions,
-  AssistantMessage as LLMAssistantMessage,
-  ToolDefinition as LLMToolDefinition,
-} from "@openkrow/llm";
+  Context as PiAiContext,
+  StreamOptions as PiAiStreamOptions,
+  AssistantMessage as PiAiAssistantMessage,
+  Tool as PiAiTool,
+  ToolCall,
+  KnownProvider,
+} from "@mariozechner/pi-ai";
 
 import type {
   AgentConfig,
   AgentEvents,
   RunOptions,
+  LLMConfig,
   Message,
   UserMessage,
   AssistantMessage,
@@ -36,7 +39,30 @@ import type {
 import { ToolManager } from "./tools/index.js";
 import type { ToolManagerOptions } from "./tools/index.js";
 import { ContextManager } from "./context/index.js";
-import { toLLMMessages, extractToolCalls, hasToolCalls } from "./context/convert.js";
+import { toLLMMessages, extractToolCalls, hasToolCalls, getTextContent } from "./context/convert.js";
+
+// ---------------------------------------------------------------------------
+// Helpers — fill gaps between pi-ai and agent needs
+// ---------------------------------------------------------------------------
+
+/**
+ * Find a model by ID across all providers (pi-ai doesn't have getModelById).
+ */
+function getModelById(modelId: string): Model<any> | undefined {
+  for (const provider of getProviders()) {
+    const models = getModels(provider);
+    const found = models.find((m: Model<any>) => m.id === modelId);
+    if (found) return found;
+  }
+  return undefined;
+}
+
+/**
+ * Get all registered models across all providers.
+ */
+function getAllModels(): Model<any>[] {
+  return getProviders().flatMap((p: KnownProvider) => getModels(p));
+}
 
 /**
  * Agent — Core agent class with async generator support.
@@ -94,11 +120,10 @@ export class Agent extends EventEmitter<AgentEvents> {
     const model = getModelById(llmConfig.model);
     if (!model) return;
 
-    const streamOpts: StreamOptions = {
+    const streamOpts: PiAiStreamOptions & Record<string, unknown> = {
       apiKey: llmConfig.apiKey,
       maxTokens: 1024, // Summary should be concise
       temperature: 0, // Deterministic summaries
-      envFallback: llmConfig.apiKey ? false : true,
     };
 
     this.context.setSummarizer(async (messages: SendableMessage[]): Promise<string> => {
@@ -111,7 +136,7 @@ export class Agent extends EventEmitter<AgentEvents> {
         "Keep the summary under 500 words.",
       ].join(" ");
 
-      const response = await llmComplete(model, {
+      const response = await piAiComplete(model, {
         systemPrompt: summaryPrompt,
         messages: llmMessages,
       }, streamOpts);
@@ -140,7 +165,7 @@ export class Agent extends EventEmitter<AgentEvents> {
   /**
    * Resolve the LLM Model object. Throws if not found.
    */
-  private resolveModel(llmConfig: LLMConfig): Model {
+  private resolveModel(llmConfig: LLMConfig): Model<any> {
     const model = getModelById(llmConfig.model);
     if (!model) {
       throw new Error(`Model "${llmConfig.model}" not found in the model registry.`);
@@ -151,20 +176,19 @@ export class Agent extends EventEmitter<AgentEvents> {
   /**
    * Build StreamOptions from LLM config.
    */
-  private buildStreamOptions(llmConfig: LLMConfig, signal?: AbortSignal): StreamOptions {
+  private buildStreamOptions(llmConfig: LLMConfig, signal?: AbortSignal): PiAiStreamOptions & Record<string, unknown> {
     return {
       apiKey: llmConfig.apiKey,
       temperature: llmConfig.temperature,
       maxTokens: llmConfig.maxTokens,
       signal,
-      envFallback: llmConfig.apiKey ? false : true,
     };
   }
 
   /**
    * Build ContextAssemblyOptions from the model and registered tools.
    */
-  private buildAssemblyOptions(model: Model): ContextAssemblyOptions {
+  private buildAssemblyOptions(model: Model<any>): ContextAssemblyOptions {
     return {
       contextWindow: model.contextWindow,
       maxOutputTokens: model.maxTokens,
@@ -173,12 +197,16 @@ export class Agent extends EventEmitter<AgentEvents> {
   }
 
   /**
-   * Convert agent ToolDefinitions to LLM ToolDefinitions.
-   * (They're structurally compatible, but this makes the type boundary explicit.)
+   * Convert agent ToolDefinitions to pi-ai Tool format.
    */
-  private getLLMToolDefinitions(): LLMToolDefinition[] | undefined {
+  private getPiAiTools(): PiAiTool[] | undefined {
     const defs = this.tools.getDefinitions();
-    return defs.length > 0 ? defs : undefined;
+    if (defs.length === 0) return undefined;
+    return defs.map((d) => ({
+      name: d.name,
+      description: d.description,
+      parameters: d.parameters as any,
+    }));
   }
 
   // ---- Tool execution ----
@@ -187,19 +215,15 @@ export class Agent extends EventEmitter<AgentEvents> {
    * Execute tool calls from an LLM response in parallel, add results to context.
    * Returns the tool result messages.
    */
-  private async executeToolCalls(llmMsg: LLMAssistantMessage): Promise<ToolResultMessage[]> {
+  private async executeToolCalls(llmMsg: PiAiAssistantMessage): Promise<ToolResultMessage[]> {
     const toolCalls = extractToolCalls(llmMsg);
 
     // Execute all tool calls in parallel
     const executions = toolCalls.map(async (tc) => {
       this.emit("tool_call", { id: tc.id, name: tc.name, arguments: tc.arguments });
 
-      let args: Record<string, unknown>;
-      try {
-        args = JSON.parse(tc.arguments);
-      } catch {
-        args = {};
-      }
+      // pi-ai provides arguments as Record<string, any> — already parsed
+      const args = tc.arguments as Record<string, unknown>;
 
       const result = await this.tools.execute(tc.name, args);
 
@@ -231,7 +255,7 @@ export class Agent extends EventEmitter<AgentEvents> {
    * Run a single prompt and return the full response.
    *
    * Implements the query loop: the agent keeps running until the LLM produces
-   * a response with no tool_use blocks (needsFollowUp === false).
+   * a response with no toolCall blocks (needsFollowUp === false).
    * An optional maxTurns safety net prevents runaway loops.
    */
   async run(input: string, options?: RunOptions): Promise<string> {
@@ -265,14 +289,14 @@ export class Agent extends EventEmitter<AgentEvents> {
         // 1. Context Assembly
         const assembled = await this.context.contextAssembly(this.buildAssemblyOptions(model));
         const llmMessages = toLLMMessages(assembled.messages);
-        const context: LLMContext = {
+        const context: PiAiContext = {
           systemPrompt: assembled.systemPrompt,
           messages: llmMessages,
-          tools: this.getLLMToolDefinitions(),
+          tools: this.getPiAiTools(),
         };
 
         // 2. Call LLM
-        const llmResponse = await llmComplete(model, context, streamOpts);
+        const llmResponse = await piAiComplete(model, context, streamOpts);
 
         // Persist assistant message
         const assistantMsg: Omit<AssistantMessage, "timestamp"> = {
@@ -282,7 +306,7 @@ export class Agent extends EventEmitter<AgentEvents> {
         const persistedMsg = this.context.addMessage(assistantMsg);
         this.emit("message", persistedMsg);
 
-        // 3. Observe content for tool_use blocks — derive needsFollowUp
+        // 3. Observe content for toolCall blocks — derive needsFollowUp
         const needsFollowUp = hasToolCalls(llmResponse);
 
         if (needsFollowUp) {
@@ -306,7 +330,7 @@ export class Agent extends EventEmitter<AgentEvents> {
    *
    * Implements the query loop with pull-based streaming: yields text deltas
    * to the consumer. Tool calls are handled internally (emitted as events).
-   * The loop continues while needsFollowUp is true (tool_use blocks observed).
+   * The loop continues while needsFollowUp is true (toolCall blocks observed).
    */
   async *stream(input: string, options?: RunOptions): AsyncGenerator<string, void, unknown> {
     if (this._isRunning) {
@@ -340,26 +364,30 @@ export class Agent extends EventEmitter<AgentEvents> {
         // 1. Context Assembly
         const assembled = await this.context.contextAssembly(this.buildAssemblyOptions(model));
         const llmMessages = toLLMMessages(assembled.messages);
-        const context: LLMContext = {
+        const context: PiAiContext = {
           systemPrompt: assembled.systemPrompt,
           messages: llmMessages,
-          tools: this.getLLMToolDefinitions(),
+          tools: this.getPiAiTools(),
         };
 
         // 2. Stream from LLM
-        const eventStream = llmStream(model, context, streamOpts);
+        const eventStream = piAiStream(model, context, streamOpts);
 
         for await (const event of eventStream) {
           switch (event.type) {
             case "text_delta":
-              this.emit("text_delta", event.text);
-              yield event.text;
+              this.emit("text_delta", event.delta);
+              yield event.delta;
               break;
-            case "tool_call_start":
-              this.emit("tool_call", { id: event.id, name: event.name, arguments: "" });
+            case "toolcall_end":
+              this.emit("tool_call", {
+                id: event.toolCall.id,
+                name: event.toolCall.name,
+                arguments: event.toolCall.arguments,
+              });
               break;
             case "error":
-              this.emit("error", event.error);
+              this.emit("error", new Error(event.error.errorMessage ?? "LLM stream error"));
               break;
           }
         }
@@ -375,7 +403,7 @@ export class Agent extends EventEmitter<AgentEvents> {
         const persistedMsg = this.context.addMessage(assistantMsg);
         this.emit("message", persistedMsg);
 
-        // 3. Observe content for tool_use blocks — derive needsFollowUp
+        // 3. Observe content for toolCall blocks — derive needsFollowUp
         const needsFollowUp = hasToolCalls(llmResponse);
 
         if (needsFollowUp) {
@@ -425,11 +453,15 @@ export { ContextManager } from "./context/index.js";
 export type { ContextManagerOptions } from "./context/index.js";
 export { PersonalityManager } from "./personality/index.js";
 
+// Re-export helper functions for consumers
+export { getTextContent, extractToolCalls, hasToolCalls } from "./context/convert.js";
+
 // Re-export types
 export type {
   AgentConfig,
   AgentEvents,
   RunOptions,
+  LLMConfig,
   Tool,
   ToolDefinition,
   ToolResult,
@@ -440,12 +472,18 @@ export type {
   SnipMarker,
   SummaryBoundary,
   SendableMessage,
+  AssistantContentPart,
+  UserContentPart,
   ContextAssemblyOptions,
   ContextAssemblyResult,
   CompactionAction,
   WorkspaceDatabaseClient,
   SummarizerFn,
-  LLMConfig,
+  KnownProvider,
+  TextContent,
+  ThinkingContent,
+  ToolCall,
+  ImageContent,
 } from "./types/index.js";
 
 // Re-export token utilities
@@ -456,6 +494,6 @@ export { assembleSystemPrompt } from "./context/prompt.js";
 export type { PromptAssemblyOptions } from "./context/prompt.js";
 
 // Re-export message conversion utilities
-export { toLLMMessage, toLLMMessages, extractToolCalls, hasToolCalls } from "./context/convert.js";
+export { toLLMMessage, toLLMMessages } from "./context/convert.js";
 
 export type { UserPersonality } from "./personality/index.js";

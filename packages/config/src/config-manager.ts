@@ -7,14 +7,13 @@
  */
 
 import type { ISettingsRepository } from "@openkrow/database";
-import type { KnownProvider, Model } from "@openkrow/llm";
+import type { KnownProvider, Model } from "@mariozechner/pi-ai";
 import {
-  getAllModels,
   getModel,
   getModels,
   getProviders,
-  resolveApiKey as resolveEnvApiKey,
-} from "@openkrow/llm";
+  getEnvApiKey,
+} from "@mariozechner/pi-ai";
 
 import {
   SETTING_KEYS,
@@ -36,6 +35,17 @@ const DEFAULT_MODEL_CONFIG: ModelConfig = {
 };
 
 const DEFAULT_MAX_TURNS = 20;
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Get all models across all providers (pi-ai doesn't have getAllModels).
+ */
+function getAllModels(): Model<any>[] {
+  return getProviders().flatMap((p: KnownProvider) => getModels(p));
+}
 
 // ---------------------------------------------------------------------------
 // ConfigManager
@@ -70,9 +80,13 @@ export class ConfigManager {
   }
 
   /** Get the full Model object for the active selection, or undefined if not found in registry. */
-  getActiveModelInfo(): Model | undefined {
+  getActiveModelInfo(): Model<any> | undefined {
     const { provider, model } = this.getActiveModel();
-    return getModel(provider, model);
+    try {
+      return getModel(provider as any, model as any);
+    } catch {
+      return undefined;
+    }
   }
 
   // -----------------------------------------------------------------------
@@ -108,16 +122,16 @@ export class ConfigManager {
   }
 
   // -----------------------------------------------------------------------
-  // Model registry queries (delegates to @openkrow/llm)
+  // Model registry queries (delegates to @mariozechner/pi-ai)
   // -----------------------------------------------------------------------
 
   /** List all available models. */
-  listModels(): Model[] {
+  listModels(): Model<any>[] {
     return getAllModels();
   }
 
   /** List models for a specific provider. */
-  listModelsByProvider(provider: KnownProvider): Model[] {
+  listModelsByProvider(provider: KnownProvider): Model<any>[] {
     return getModels(provider);
   }
 
@@ -180,7 +194,7 @@ export class ConfigManager {
   /**
    * Resolve the API key for a provider with fallback chain:
    * 1. Stored API key in DB
-   * 2. Environment variable
+   * 2. Environment variable (via pi-ai's getEnvApiKey)
    *
    * Returns null if no key found anywhere.
    */
@@ -190,7 +204,7 @@ export class ConfigManager {
     if (stored) return stored;
 
     // 2. Env var fallback
-    return resolveEnvApiKey(provider) ?? null;
+    return getEnvApiKey(provider) ?? null;
   }
 
   // -----------------------------------------------------------------------

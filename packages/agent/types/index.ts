@@ -1,20 +1,57 @@
 /**
  * @openkrow/agent — Type definitions
+ *
+ * Uses @mariozechner/pi-ai types directly for LLM interop.
+ * Agent-specific types (messages with timestamps, tool execution, etc.) are defined here.
  */
 
 import type {
-  LLMConfig,
-  ContentPart,
-  ToolCallContent,
   KnownProvider,
-} from "@openkrow/llm";
+  TextContent,
+  ThinkingContent,
+  ToolCall,
+  ImageContent,
+} from "@mariozechner/pi-ai";
 import type { WorkspaceDatabaseClient } from "@openkrow/database";
 import type { SkillManager } from "@openkrow/skill";
 import type { QuestionHandler } from "../tools/question.js";
 import type { WorkspaceManager } from "@openkrow/workspace";
 
 export type { WorkspaceDatabaseClient } from "@openkrow/database";
-export type { LLMConfig } from "@openkrow/llm";
+
+// ---------------------------------------------------------------------------
+// Re-export pi-ai types used across the agent
+// ---------------------------------------------------------------------------
+
+export type { KnownProvider, TextContent, ThinkingContent, ToolCall, ImageContent } from "@mariozechner/pi-ai";
+
+/**
+ * Content part union — the types that can appear in assistant message content.
+ * Aligned with pi-ai's AssistantMessage.content type.
+ */
+export type AssistantContentPart = TextContent | ThinkingContent | ToolCall;
+
+/**
+ * Content part union for user messages.
+ */
+export type UserContentPart = TextContent | ImageContent;
+
+// ---------------------------------------------------------------------------
+// LLM Configuration (agent-specific, not in pi-ai)
+// ---------------------------------------------------------------------------
+
+/**
+ * Simplified LLM configuration used by the agent.
+ * Maps to pi-ai's Model + StreamOptions at call time.
+ */
+export interface LLMConfig {
+  provider: KnownProvider;
+  model: string;
+  apiKey?: string;
+  baseUrl?: string;
+  maxTokens?: number;
+  temperature?: number;
+}
 
 // ---------------------------------------------------------------------------
 // Agent Configuration
@@ -97,7 +134,7 @@ export interface ToolResult {
  */
 export interface UserMessage {
   role: "user";
-  content: string | ContentPart[];
+  content: string | UserContentPart[];
   timestamp: number;
 }
 
@@ -106,7 +143,7 @@ export interface UserMessage {
  */
 export interface AssistantMessage {
   role: "assistant";
-  content: ContentPart[];
+  content: AssistantContentPart[];
   timestamp: number;
 }
 
@@ -222,7 +259,7 @@ export interface AgentEvents {
   /** Emitted for each text delta during streaming */
   text_delta: (text: string) => void;
   /** Emitted when the LLM requests a tool call */
-  tool_call: (toolCall: { id: string; name: string; arguments: string }) => void;
+  tool_call: (toolCall: { id: string; name: string; arguments: Record<string, unknown> }) => void;
   /** Emitted when a tool execution completes */
   tool_result: (result: { toolCallId: string; toolName: string; success: boolean; output: string }) => void;
   /** Emitted on errors (non-fatal, the loop may continue) */

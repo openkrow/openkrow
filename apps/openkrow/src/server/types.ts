@@ -91,7 +91,7 @@ export interface ModelListResponse {
     provider: string;
     contextWindow: number;
     maxTokens: number;
-    supportsTools: boolean;
+    reasoning: boolean;
   }>;
   providers: string[];
 }

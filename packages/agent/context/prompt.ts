@@ -14,7 +14,7 @@
 import { readFileSync } from "node:fs";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import type { KnownProvider } from "@openkrow/llm";
+import type { KnownProvider } from "@mariozechner/pi-ai";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 // Works both from source (context/) and from dist (dist/context/) because

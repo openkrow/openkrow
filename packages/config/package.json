@@ -20,7 +20,7 @@
   },
   "dependencies": {
     "@openkrow/database": "*",
-    "@openkrow/llm": "*"
+    "@mariozechner/pi-ai": "^0.70.5"
   },
   "devDependencies": {
     "@types/node": "^22.12.0",

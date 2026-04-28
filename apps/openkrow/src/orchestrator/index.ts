@@ -15,8 +15,8 @@ import {
 } from "@openkrow/database";
 import { ConfigManager } from "@openkrow/config";
 import { Agent } from "@openkrow/agent";
+import type { LLMConfig } from "@openkrow/agent";
 import { WorkspaceManager } from "@openkrow/workspace";
-import type { LLMConfig } from "@openkrow/llm";
 import type { Conversation } from "@openkrow/database";
 
 export interface OrchestratorConfig {
