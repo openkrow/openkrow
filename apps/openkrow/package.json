@@ -14,7 +14,7 @@
   "scripts": {
     "build": "tsc",
     "dev": "tsc --watch",
-    "start": "bun run dist/server/index.js",
+    "start": "bun run dist/index.js",
     "clean": "rm -rf dist",
     "typecheck": "tsc --noEmit",
     "test": "node --test dist/__tests__/*.test.js"
