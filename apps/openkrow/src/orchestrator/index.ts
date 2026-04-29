@@ -15,7 +15,7 @@ import {
 } from "@openkrow/database";
 import { ConfigManager } from "@openkrow/config";
 import { Agent } from "@openkrow/agent";
-import type { LLMConfig } from "@openkrow/agent";
+import type { LLMConfig, StreamEvent } from "@openkrow/agent";
 import { WorkspaceManager } from "@openkrow/workspace";
 import type { Conversation } from "@openkrow/database";
 
@@ -187,7 +187,7 @@ export class Orchestrator {
     conversationId: string,
     message: string,
     overrides?: { provider?: string; model?: string },
-  ): AsyncGenerator<string, { messageId: string }, unknown> {
+  ): AsyncGenerator<StreamEvent, { messageId: string }, unknown> {
     const db = this.ensureWorkspaceDb();
     const conversation = db.conversations.findById(conversationId);
     if (!conversation) throw new Error(`Conversation not found: ${conversationId}`);

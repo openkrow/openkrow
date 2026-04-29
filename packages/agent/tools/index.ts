@@ -18,6 +18,7 @@ import { createWebFetchTool } from "./webfetch.js";
 import { createWebSearchTool } from "./websearch.js";
 import { createSkillTool } from "./skill.js";
 import { createQuestionTool } from "./question.js";
+import { createShowWidgetTool } from "./show-widget.js";
 
 // ---------------------------------------------------------------------------
 // ToolManager options — dependencies needed by built-in tools
@@ -62,6 +63,9 @@ export class ToolManager {
     const { tool: todoTool, getTodos } = createTodoTool();
     this.register(todoTool);
     this._getTodos = getTodos;
+
+    // Widget tool — no dependencies
+    this.register(createShowWidgetTool());
 
     // Conditional tools — only register if dependencies provided
     if (opts.skillManager) {
@@ -135,3 +139,4 @@ export { createWebSearchTool } from "./websearch.js";
 export { createSkillTool } from "./skill.js";
 export { createQuestionTool } from "./question.js";
 export type { QuestionOption, QuestionPrompt, QuestionHandler } from "./question.js";
+export { createShowWidgetTool } from "./show-widget.js";

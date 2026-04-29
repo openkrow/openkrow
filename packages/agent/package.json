@@ -23,8 +23,7 @@
     "@openkrow/skill": "*",
     "@openkrow/workspace": "*",
     "@mariozechner/pi-ai": "^0.70.5",
-    "bun-types": "^1.1.0",
-    "eventemitter3": "^5.0.1"
+    "bun-types": "^1.1.0"
   },
   "devDependencies": {
     "typescript": "^5.7.0"

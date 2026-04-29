@@ -3,6 +3,7 @@
  */
 
 import type { Orchestrator } from "../orchestrator/index.js";
+import type { StreamEvent } from "@openkrow/agent";
 import type {
   ChatRequest,
   ChatResponse,
@@ -41,7 +42,7 @@ export async function handleChat(
 export async function* handleStreamChat(
   orchestrator: Orchestrator,
   request: ChatRequest,
-): AsyncGenerator<string, ChatResponse, unknown> {
+): AsyncGenerator<StreamEvent, ChatResponse, unknown> {
   let conversationId = request.conversationId;
   if (!conversationId) {
     const conversation = orchestrator.getOrCreateConversation();

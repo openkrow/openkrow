@@ -145,7 +145,7 @@ export class OpenKrowServer {
                     );
 
                     for await (const chunk of generator) {
-                      const data = JSON.stringify({ type: "chunk", content: chunk });
+                      const data = JSON.stringify(chunk);
                       controller.enqueue(new TextEncoder().encode(`data: ${data}\n\n`));
                     }
 

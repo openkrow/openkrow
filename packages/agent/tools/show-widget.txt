@@ -1,0 +1,16 @@
+Use this tool to display visual content to the user by generating SVG code.
+The frontend will render the SVG directly in the chat interface.
+
+Usage:
+- Generate valid SVG markup to create charts, diagrams, illustrations, or any visual content
+- The SVG should be self-contained (no external references)
+- Use viewBox for responsive sizing
+- Keep SVG concise but visually clear
+- You can use this for: flowcharts, data visualizations, architecture diagrams, simple illustrations, progress indicators, comparison tables rendered visually, etc.
+
+Guidelines:
+- Prefer clean, readable designs with good contrast
+- Use text elements for labels
+- Keep file size reasonable (under 50KB of SVG code)
+- Do not include JavaScript or event handlers in the SVG
+- Use colors meaningfully to convey information

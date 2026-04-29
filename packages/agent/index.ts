@@ -6,11 +6,9 @@
  * for toolCall blocks (needsFollowUp) → tool execution → repeat until done.
  */
 
-import { EventEmitter } from "eventemitter3";
 import {
   stream as piAiStream,
   complete as piAiComplete,
-  getModel,
   getModels,
   getProviders,
 } from "@mariozechner/pi-ai";
@@ -20,14 +18,13 @@ import type {
   StreamOptions as PiAiStreamOptions,
   AssistantMessage as PiAiAssistantMessage,
   Tool as PiAiTool,
-  ToolCall,
   KnownProvider,
 } from "@mariozechner/pi-ai";
 
 import type {
   AgentConfig,
-  AgentEvents,
   RunOptions,
+  StreamEvent,
   LLMConfig,
   Message,
   UserMessage,
@@ -37,7 +34,6 @@ import type {
   ContextAssemblyOptions,
 } from "./types/index.js";
 import { ToolManager } from "./tools/index.js";
-import type { ToolManagerOptions } from "./tools/index.js";
 import { ContextManager } from "./context/index.js";
 import { toLLMMessages, extractToolCalls, hasToolCalls, getTextContent } from "./context/convert.js";
 
@@ -70,7 +66,7 @@ function getAllModels(): Model<any>[] {
  * The main orchestrator for running AI agent interactions with tool calling,
  * context management, and streaming support.
  */
-export class Agent extends EventEmitter<AgentEvents> {
+export class Agent {
   readonly config: AgentConfig;
   readonly tools: ToolManager;
   readonly context: ContextManager;
@@ -78,7 +74,6 @@ export class Agent extends EventEmitter<AgentEvents> {
   private _isRunning = false;
 
   constructor(config: AgentConfig) {
-    super();
     this.config = config;
     this.tools = new ToolManager({
       cwd: config.cwd,
@@ -209,30 +204,35 @@ export class Agent extends EventEmitter<AgentEvents> {
     }));
   }
 
-  // ---- Tool execution ----
+  // ---- Tool execution (yields events) ----
 
   /**
    * Execute tool calls from an LLM response in parallel, add results to context.
-   * Returns the tool result messages.
+   * Returns StreamEvents for each tool call and result.
    */
-  private async executeToolCalls(llmMsg: PiAiAssistantMessage): Promise<ToolResultMessage[]> {
+  private async executeToolCalls(llmMsg: PiAiAssistantMessage): Promise<StreamEvent[]> {
     const toolCalls = extractToolCalls(llmMsg);
+    const events: StreamEvent[] = [];
 
     // Execute all tool calls in parallel
     const executions = toolCalls.map(async (tc) => {
-      this.emit("tool_call", { id: tc.id, name: tc.name, arguments: tc.arguments });
+      const callEvent: StreamEvent = {
+        type: "tool_call",
+        id: tc.id,
+        name: tc.name,
+        arguments: tc.arguments as Record<string, unknown>,
+      };
 
-      // pi-ai provides arguments as Record<string, any> — already parsed
       const args = tc.arguments as Record<string, unknown>;
-
       const result = await this.tools.execute(tc.name, args);
 
-      this.emit("tool_result", {
+      const resultEvent: StreamEvent = {
+        type: "tool_result",
         toolCallId: tc.id,
         toolName: tc.name,
         success: result.success,
         output: result.output,
-      });
+      };
 
       const toolMsg: Omit<ToolResultMessage, "timestamp"> = {
         role: "tool",
@@ -242,112 +242,36 @@ export class Agent extends EventEmitter<AgentEvents> {
         isError: !result.success,
       };
 
-      return this.context.addMessage(toolMsg) as ToolResultMessage;
+      this.context.addMessage(toolMsg);
+      return [callEvent, resultEvent];
     });
 
-    const settled = await Promise.all(executions);
-    return settled;
+    const pairs = await Promise.all(executions);
+    for (const pair of pairs) events.push(...pair);
+    return events;
   }
 
   // ---- Public API ----
 
   /**
-   * Run a single prompt and return the full response.
+   * Stream a response as an async generator of StreamEvents.
    *
-   * Implements the query loop: the agent keeps running until the LLM produces
-   * a response with no toolCall blocks (needsFollowUp === false).
-   * An optional maxTurns safety net prevents runaway loops.
-   */
-  async run(input: string, options?: RunOptions): Promise<string> {
-    if (this._isRunning) {
-      throw new Error("Agent is already running");
-    }
-
-    // Resolve LLM config: per-call → constructor fallback
-    const llmConfig = this.effectiveLLMConfig(options?.llm);
-    const model = this.resolveModel(llmConfig);
-    const streamOpts = this.buildStreamOptions(llmConfig, options?.signal);
-
-    // Ensure summarizer is configured with current LLM config
-    this.configureSummarizer(llmConfig);
-
-    this._isRunning = true;
-
-    // Add user message
-    const userMsg: Omit<UserMessage, "timestamp"> = { role: "user", content: input };
-    this.context.addMessage(userMsg);
-
-    let turnCount = 0;
-
-    try {
-      while (true) {
-        // Safety net: max turns prevents death spirals
-        if (options?.maxTurns && turnCount >= options.maxTurns) {
-          return "[Agent reached maximum turn limit]";
-        }
-
-        // 1. Context Assembly
-        const assembled = await this.context.contextAssembly(this.buildAssemblyOptions(model));
-        const llmMessages = toLLMMessages(assembled.messages);
-        const context: PiAiContext = {
-          systemPrompt: assembled.systemPrompt,
-          messages: llmMessages,
-          tools: this.getPiAiTools(),
-        };
-
-        // 2. Call LLM
-        const llmResponse = await piAiComplete(model, context, streamOpts);
-
-        // Persist assistant message
-        const assistantMsg: Omit<AssistantMessage, "timestamp"> = {
-          role: "assistant",
-          content: llmResponse.content,
-        };
-        const persistedMsg = this.context.addMessage(assistantMsg);
-        this.emit("message", persistedMsg);
-
-        // 3. Observe content for toolCall blocks — derive needsFollowUp
-        const needsFollowUp = hasToolCalls(llmResponse);
-
-        if (needsFollowUp) {
-          // 4. Tool Execution
-          await this.executeToolCalls(llmResponse);
-          turnCount++;
-          continue;
-        }
-
-        // 5. No tool calls — normal completion
-        return getTextContent(llmResponse);
-      }
-    } finally {
-      this._isRunning = false;
-      this.emit("done");
-    }
-  }
-
-  /**
-   * Stream a response token-by-token using an async generator.
-   *
-   * Implements the query loop with pull-based streaming: yields text deltas
-   * to the consumer. Tool calls are handled internally (emitted as events).
+   * Yields all LLM response events: text deltas, thinking blocks, tool calls,
+   * tool results, messages, errors, and a final done event.
    * The loop continues while needsFollowUp is true (toolCall blocks observed).
    */
-  async *stream(input: string, options?: RunOptions): AsyncGenerator<string, void, unknown> {
+  async *stream(input: string, options?: RunOptions): AsyncGenerator<StreamEvent, void, unknown> {
     if (this._isRunning) {
       throw new Error("Agent is already running");
     }
 
-    // Resolve LLM config: per-call → constructor fallback
     const llmConfig = this.effectiveLLMConfig(options?.llm);
     const model = this.resolveModel(llmConfig);
     const streamOpts = this.buildStreamOptions(llmConfig, options?.signal);
-
-    // Ensure summarizer is configured with current LLM config
     this.configureSummarizer(llmConfig);
 
     this._isRunning = true;
 
-    // Add user message
     const userMsg: Omit<UserMessage, "timestamp"> = { role: "user", content: input };
     this.context.addMessage(userMsg);
 
@@ -355,9 +279,8 @@ export class Agent extends EventEmitter<AgentEvents> {
 
     try {
       while (true) {
-        // Safety net: max turns prevents death spirals
         if (options?.maxTurns && turnCount >= options.maxTurns) {
-          yield "[Agent reached maximum turn limit]";
+          yield { type: "text_delta", delta: "[Agent reached maximum turn limit]" };
           return;
         }
 
@@ -376,18 +299,16 @@ export class Agent extends EventEmitter<AgentEvents> {
         for await (const event of eventStream) {
           switch (event.type) {
             case "text_delta":
-              this.emit("text_delta", event.delta);
-              yield event.delta;
+              yield { type: "text_delta", delta: event.delta };
+              break;
+            case "thinking_delta":
+              yield { type: "thinking", thinking: event.delta };
               break;
             case "toolcall_end":
-              this.emit("tool_call", {
-                id: event.toolCall.id,
-                name: event.toolCall.name,
-                arguments: event.toolCall.arguments,
-              });
+              // Tool call events will be yielded during execution below
               break;
             case "error":
-              this.emit("error", new Error(event.error.errorMessage ?? "LLM stream error"));
+              yield { type: "error", error: new Error(event.error.errorMessage ?? "LLM stream error") };
               break;
           }
         }
@@ -401,25 +322,40 @@ export class Agent extends EventEmitter<AgentEvents> {
           content: llmResponse.content,
         };
         const persistedMsg = this.context.addMessage(assistantMsg);
-        this.emit("message", persistedMsg);
+        yield { type: "message", message: persistedMsg };
 
         // 3. Observe content for toolCall blocks — derive needsFollowUp
         const needsFollowUp = hasToolCalls(llmResponse);
 
         if (needsFollowUp) {
-          // 4. Tool Execution
-          await this.executeToolCalls(llmResponse);
+          // 4. Tool Execution — yield all tool events
+          const toolEvents = await this.executeToolCalls(llmResponse);
+          for (const evt of toolEvents) yield evt;
           turnCount++;
           continue;
         }
 
-        // 5. No tool calls — normal completion
+        // 5. No tool calls — done
         return;
       }
     } finally {
       this._isRunning = false;
-      this.emit("done");
+      yield { type: "done" };
     }
+  }
+
+  /**
+   * Run a single prompt and return the full text response.
+   * Internally consumes the stream() generator.
+   */
+  async run(input: string, options?: RunOptions): Promise<string> {
+    let result = "";
+    for await (const event of this.stream(input, options)) {
+      if (event.type === "text_delta") {
+        result += event.delta;
+      }
+    }
+    return result;
   }
 }
 
@@ -451,7 +387,6 @@ export type {
 } from "./tools/index.js";
 export { ContextManager } from "./context/index.js";
 export type { ContextManagerOptions } from "./context/index.js";
-export { PersonalityManager } from "./personality/index.js";
 
 // Re-export helper functions for consumers
 export { getTextContent, extractToolCalls, hasToolCalls } from "./context/convert.js";
@@ -459,7 +394,7 @@ export { getTextContent, extractToolCalls, hasToolCalls } from "./context/conver
 // Re-export types
 export type {
   AgentConfig,
-  AgentEvents,
+  StreamEvent,
   RunOptions,
   LLMConfig,
   Tool,
@@ -495,5 +430,3 @@ export type { PromptAssemblyOptions } from "./context/prompt.js";
 
 // Re-export message conversion utilities
 export { toLLMMessage, toLLMMessages } from "./context/convert.js";
-
-export type { UserPersonality } from "./personality/index.js";

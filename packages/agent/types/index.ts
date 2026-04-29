@@ -250,20 +250,14 @@ export interface CompactionAction {
 }
 
 // ---------------------------------------------------------------------------
-// Events
+// Stream Events — yielded from the async generator
 // ---------------------------------------------------------------------------
 
-export interface AgentEvents {
-  /** Emitted when a complete message is added to the conversation */
-  message: (message: Message) => void;
-  /** Emitted for each text delta during streaming */
-  text_delta: (text: string) => void;
-  /** Emitted when the LLM requests a tool call */
-  tool_call: (toolCall: { id: string; name: string; arguments: Record<string, unknown> }) => void;
-  /** Emitted when a tool execution completes */
-  tool_result: (result: { toolCallId: string; toolName: string; success: boolean; output: string }) => void;
-  /** Emitted on errors (non-fatal, the loop may continue) */
-  error: (error: Error) => void;
-  /** Emitted when the agent finishes processing */
-  done: () => void;
-}
+export type StreamEvent =
+  | { type: "text_delta"; delta: string }
+  | { type: "thinking"; thinking: string }
+  | { type: "tool_call"; id: string; name: string; arguments: Record<string, unknown> }
+  | { type: "tool_result"; toolCallId: string; toolName: string; success: boolean; output: string }
+  | { type: "message"; message: Message }
+  | { type: "error"; error: Error }
+  | { type: "done" };

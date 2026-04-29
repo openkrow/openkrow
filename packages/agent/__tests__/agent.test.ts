@@ -11,7 +11,6 @@ import { Agent, ToolRegistry } from "../index.js";
 import type { AgentConfig, Tool } from "../types/index.js";
 import type {
   AssistantMessage as PiAiAssistantMessage,
-  AssistantMessageEvent,
 } from "@mariozechner/pi-ai";
 import { toLLMMessage, toLLMMessages, extractToolCalls, hasToolCalls } from "../context/convert.js";
 
@@ -176,18 +175,19 @@ describe("Agent construction", () => {
 // ---------------------------------------------------------------------------
 
 describe("Agent events", () => {
-  it("should not emit done if agent never started (config error)", async () => {
+  it("should not yield done if agent never started (config error)", async () => {
     const agent = new Agent({ name: "test-agent" });
-    let doneEmitted = false;
-    agent.on("done", () => { doneEmitted = true; });
+    const events: any[] = [];
 
     try {
-      await agent.run("hello");
+      for await (const event of agent.stream("hello")) {
+        events.push(event);
+      }
     } catch {
       // Expected — no LLM config, error thrown before loop starts
     }
-    // done should NOT fire because the agent never entered the running state
-    assert.strictEqual(doneEmitted, false);
+    // No events should be yielded because the agent never entered the running state
+    assert.strictEqual(events.length, 0);
     assert.strictEqual(agent.isRunning, false);
   });
 });
