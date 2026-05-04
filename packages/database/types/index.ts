@@ -3,7 +3,7 @@
  *
  * Two client types:
  * - GlobalDatabaseClient: settings only (global DB at ~/.openkrow/)
- * - WorkspaceDatabaseClient: conversations + messages (per-workspace DB)
+ * - WorkspaceDatabaseClient: messages (per-workspace DB)
  */
 
 export interface DatabaseConfig {
@@ -15,16 +15,8 @@ export interface DatabaseConfig {
   foreignKeys?: boolean;
 }
 
-export interface Conversation {
-  id: string;
-  title?: string;
-  created_at: string;
-  updated_at: string;
-}
-
 export interface Message {
   id: string;
-  conversation_id: string;
   role: "user" | "assistant" | "system" | "tool" | "snip" | "summary";
   content: string;
   tool_calls?: string;
@@ -51,16 +43,7 @@ export interface Migration {
 // Repository interfaces
 // ---------------------------------------------------------------------------
 
-export interface CreateConversationInput {
-  title?: string;
-}
-
-export interface UpdateConversationInput {
-  title?: string;
-}
-
 export interface CreateMessageInput {
-  conversation_id: string;
   role: "user" | "assistant" | "system" | "tool" | "snip" | "summary";
   content: string;
   tool_calls?: Record<string, unknown>[];
@@ -70,28 +53,15 @@ export interface CreateMessageInput {
   metadata?: Record<string, unknown>;
 }
 
-export interface IConversationRepository {
-  findById(id: string): Conversation | null;
-  findAll(limit?: number, offset?: number): Conversation[];
-  deleteById(id: string): boolean;
-  count(): number;
-  create(input?: CreateConversationInput): Conversation;
-  update(id: string, input: UpdateConversationInput): Conversation | null;
-  getRecent(limit?: number): Conversation[];
-  searchByTitle(query: string, limit?: number): Conversation[];
-}
-
 export interface IMessageRepository {
   findById(id: string): Message | null;
   findAll(limit?: number, offset?: number): Message[];
   deleteById(id: string): boolean;
   count(): number;
   create(input: CreateMessageInput): Message;
-  findByConversationId(conversationId: string, limit?: number): Message[];
-  getLastMessages(conversationId: string, count: number): Message[];
-  countByConversationId(conversationId: string): number;
-  deleteByConversationId(conversationId: string): number;
+  getLastMessages(count: number): Message[];
   searchByContent(query: string, limit?: number): Message[];
+  deleteAll(): number;
 }
 
 export interface ISettingsRepository {
@@ -118,10 +88,9 @@ export interface GlobalDatabaseClient {
 }
 
 /**
- * Per-workspace database client — conversations + messages.
+ * Per-workspace database client — messages only.
  * Lives at <workspace>/.krow/data.db
  */
 export interface WorkspaceDatabaseClient {
-  conversations: IConversationRepository;
   messages: IMessageRepository;
 }

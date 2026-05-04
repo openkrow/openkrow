@@ -1,5 +1,6 @@
 /**
- * Message repository for managing conversation messages
+ * Message repository — stores all messages for a workspace.
+ * One workspace = one conversation, so no conversation_id needed.
  */
 
 import { BaseRepository } from "./base.js";
@@ -15,13 +16,12 @@ export class MessageRepository extends BaseRepository<Message> {
     const metadata = input.metadata ? JSON.stringify(input.metadata) : null;
 
     const stmt = this.db.prepare(`
-      INSERT INTO messages (id, conversation_id, role, content, tool_calls, tool_call_id, tool_name, is_error, metadata, created_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO messages (id, role, content, tool_calls, tool_call_id, tool_name, is_error, metadata, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
     stmt.run(
       id,
-      input.conversation_id,
       input.role,
       input.content,
       toolCalls,
@@ -35,51 +35,29 @@ export class MessageRepository extends BaseRepository<Message> {
     return this.findById(id)!;
   }
 
-  findByConversationId(conversationId: string, limit?: number): Message[] {
-    let sql = "SELECT * FROM messages WHERE conversation_id = ? ORDER BY created_at ASC";
-    const params: (string | number)[] = [conversationId];
-
-    if (limit !== undefined) {
-      sql += " LIMIT ?";
-      params.push(limit);
-    }
-
-    const stmt = this.db.prepare(sql);
-    return stmt.all(...params) as Message[];
-  }
-
-  getLastMessages(conversationId: string, count: number): Message[] {
+  getLastMessages(count: number): Message[] {
     const stmt = this.db.prepare(`
       SELECT * FROM (
-        SELECT * FROM messages 
-        WHERE conversation_id = ? 
-        ORDER BY created_at DESC 
+        SELECT * FROM messages
+        ORDER BY created_at DESC
         LIMIT ?
       ) ORDER BY created_at ASC
     `);
 
-    return stmt.all(conversationId, count) as Message[];
+    return stmt.all(count) as Message[];
   }
 
-  countByConversationId(conversationId: string): number {
-    const stmt = this.db.prepare(
-      "SELECT COUNT(*) as count FROM messages WHERE conversation_id = ?"
-    );
-    const result = stmt.get(conversationId) as { count: number };
-    return result.count;
-  }
-
-  deleteByConversationId(conversationId: string): number {
-    const stmt = this.db.prepare("DELETE FROM messages WHERE conversation_id = ?");
-    const result = stmt.run(conversationId);
+  deleteAll(): number {
+    const stmt = this.db.prepare("DELETE FROM messages");
+    const result = stmt.run();
     return result.changes;
   }
 
   searchByContent(query: string, limit: number = 50): Message[] {
     const stmt = this.db.prepare(`
-      SELECT * FROM messages 
-      WHERE content LIKE ? 
-      ORDER BY created_at DESC 
+      SELECT * FROM messages
+      WHERE content LIKE ?
+      ORDER BY created_at DESC
       LIMIT ?
     `);
 

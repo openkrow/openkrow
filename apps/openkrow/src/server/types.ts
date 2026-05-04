@@ -23,8 +23,6 @@ export const DEFAULT_SERVER_CONFIG: ServerConfig = {
 export interface ChatRequest {
   /** The user's message */
   message: string;
-  /** Optional conversation ID to continue a conversation */
-  conversationId?: string;
   /** Whether to stream the response */
   stream?: boolean;
   /** Optional provider override for this request */
@@ -36,8 +34,6 @@ export interface ChatRequest {
 export interface ChatResponse {
   /** The assistant's response */
   response: string;
-  /** Conversation ID for continuing the conversation */
-  conversationId: string;
   /** Message ID */
   messageId: string;
 }

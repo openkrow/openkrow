@@ -1,9 +1,11 @@
 /**
- * Orchestrator - Central manager for agents and conversations
+ * Orchestrator - Central manager for the workspace agent
  *
  * Uses two database clients:
  * - Global: settings (API keys, model config, etc.)
- * - Workspace: conversations + messages (per-workspace)
+ * - Workspace: messages (per-workspace DB)
+ *
+ * One workspace = one conversation = one agent.
  */
 
 import {
@@ -17,7 +19,6 @@ import { ConfigManager } from "@openkrow/config";
 import { Agent } from "@openkrow/agent";
 import type { LLMConfig, StreamEvent } from "@openkrow/agent";
 import { WorkspaceManager } from "@openkrow/workspace";
-import type { Conversation } from "@openkrow/database";
 
 export interface OrchestratorConfig {
   /** Database configuration for the global DB */
@@ -33,15 +34,16 @@ export interface OrchestratorConfig {
 }
 
 /**
- * Orchestrator manages the lifecycle of agents and database interactions
+ * Orchestrator manages the lifecycle of the workspace agent and database interactions.
+ * One workspace = one agent = one continuous conversation.
  */
 export class Orchestrator {
   private globalDb: GlobalDatabaseClient;
   private workspaceDb: WorkspaceDatabaseClient | null = null;
   private _config: OrchestratorConfig;
   private _configManager: ConfigManager;
-  private agents: Map<string, Agent> = new Map();
-  private activeRequests: Map<string, AbortController> = new Map();
+  private agent: Agent | null = null;
+  private activeRequest: AbortController | null = null;
   private workspace: WorkspaceManager | null = null;
 
   private constructor(
@@ -100,50 +102,30 @@ export class Orchestrator {
   }
 
   // -----------------------------------------------------------------------
-  // Conversation
+  // Agent management
   // -----------------------------------------------------------------------
 
   private ensureWorkspaceDb(): WorkspaceDatabaseClient {
     if (!this.workspaceDb) {
-      throw new Error("No workspace configured. Provide workspacePath to use conversations.");
+      throw new Error("No workspace configured. Provide workspacePath.");
     }
     return this.workspaceDb;
   }
 
-  getOrCreateConversation(): Conversation {
-    const db = this.ensureWorkspaceDb();
-    const conversations = db.conversations.getRecent(1);
-    if (conversations.length > 0) return conversations[0]!;
-    return db.conversations.create();
-  }
-
-  getConversation(conversationId: string): Conversation | null {
-    return this.ensureWorkspaceDb().conversations.findById(conversationId);
-  }
-
-  // -----------------------------------------------------------------------
-  // Agent management
-  // -----------------------------------------------------------------------
-
-  getAgent(conversationId: string): Agent {
-    let agent = this.agents.get(conversationId);
-
-    if (!agent) {
+  private getAgent(): Agent {
+    if (!this.agent) {
       const systemPrompt = this._config.systemPrompt ?? this._configManager.getSystemPrompt() ?? undefined;
 
-      agent = new Agent({
-        name: `openkrow-${conversationId}`,
+      this.agent = new Agent({
+        name: "openkrow",
         description: "OpenKrow AI assistant",
         customPrompt: systemPrompt,
         database: this.ensureWorkspaceDb(),
-        conversationId,
         ...(this.workspace ? { workspace: this.workspace } : {}),
       });
-
-      this.agents.set(conversationId, agent);
     }
 
-    return agent;
+    return this.agent;
   }
 
   // -----------------------------------------------------------------------
@@ -151,20 +133,16 @@ export class Orchestrator {
   // -----------------------------------------------------------------------
 
   async chat(
-    conversationId: string,
     message: string,
     overrides?: { provider?: string; model?: string },
   ): Promise<{ response: string; messageId: string }> {
-    const db = this.ensureWorkspaceDb();
-    const conversation = db.conversations.findById(conversationId);
-    if (!conversation) throw new Error(`Conversation not found: ${conversationId}`);
-
-    const agent = this.getAgent(conversationId);
+    this.ensureWorkspaceDb();
+    const agent = this.getAgent();
     const llmConfig = this.resolveLLMConfig(overrides);
     const maxTurns = this._config.maxTurns ?? this._configManager.getMaxTurns();
 
     const controller = new AbortController();
-    this.activeRequests.set(conversationId, controller);
+    this.activeRequest = controller;
 
     try {
       const response = await agent.run(message, {
@@ -173,31 +151,27 @@ export class Orchestrator {
         signal: controller.signal,
       });
 
-      const messages = db.messages.getLastMessages(conversationId, 1);
+      const db = this.ensureWorkspaceDb();
+      const messages = db.messages.getLastMessages(1);
       const lastMessage = messages[messages.length - 1];
-      db.conversations.update(conversationId, {});
 
       return { response, messageId: lastMessage?.id ?? "" };
     } finally {
-      this.activeRequests.delete(conversationId);
+      this.activeRequest = null;
     }
   }
 
   async *streamChat(
-    conversationId: string,
     message: string,
     overrides?: { provider?: string; model?: string },
   ): AsyncGenerator<StreamEvent, { messageId: string }, unknown> {
-    const db = this.ensureWorkspaceDb();
-    const conversation = db.conversations.findById(conversationId);
-    if (!conversation) throw new Error(`Conversation not found: ${conversationId}`);
-
-    const agent = this.getAgent(conversationId);
+    this.ensureWorkspaceDb();
+    const agent = this.getAgent();
     const llmConfig = this.resolveLLMConfig(overrides);
     const maxTurns = this._config.maxTurns ?? this._configManager.getMaxTurns();
 
     const controller = new AbortController();
-    this.activeRequests.set(conversationId, controller);
+    this.activeRequest = controller;
 
     try {
       for await (const chunk of agent.stream(message, {
@@ -208,13 +182,13 @@ export class Orchestrator {
         yield chunk;
       }
 
-      const messages = db.messages.getLastMessages(conversationId, 1);
+      const db = this.ensureWorkspaceDb();
+      const messages = db.messages.getLastMessages(1);
       const lastMessage = messages[messages.length - 1];
-      db.conversations.update(conversationId, {});
 
       return { messageId: lastMessage?.id ?? "" };
     } finally {
-      this.activeRequests.delete(conversationId);
+      this.activeRequest = null;
     }
   }
 
@@ -222,11 +196,10 @@ export class Orchestrator {
   // Request cancellation
   // -----------------------------------------------------------------------
 
-  cancelRequest(conversationId: string): boolean {
-    const controller = this.activeRequests.get(conversationId);
-    if (!controller) return false;
-    controller.abort();
-    this.activeRequests.delete(conversationId);
+  cancelRequest(): boolean {
+    if (!this.activeRequest) return false;
+    this.activeRequest.abort();
+    this.activeRequest = null;
     return true;
   }
 
@@ -234,16 +207,13 @@ export class Orchestrator {
   // Queries
   // -----------------------------------------------------------------------
 
-  getConversationHistory(conversationId: string, limit?: number) {
-    return this.ensureWorkspaceDb().messages.findByConversationId(conversationId, limit);
-  }
-
-  getRecentConversations(limit?: number) {
-    return this.ensureWorkspaceDb().conversations.getRecent(limit);
+  getHistory(limit?: number) {
+    const db = this.ensureWorkspaceDb();
+    return limit ? db.messages.getLastMessages(limit) : db.messages.findAll();
   }
 
   getActiveAgentsCount(): number {
-    return this.agents.size;
+    return this.agent ? 1 : 0;
   }
 
   getWorkspace(): WorkspaceManager | null {
@@ -255,10 +225,10 @@ export class Orchestrator {
   // -----------------------------------------------------------------------
 
   cleanup(): void {
-    for (const controller of this.activeRequests.values()) {
-      controller.abort();
+    if (this.activeRequest) {
+      this.activeRequest.abort();
+      this.activeRequest = null;
     }
-    this.activeRequests.clear();
-    this.agents.clear();
+    this.agent = null;
   }
 }

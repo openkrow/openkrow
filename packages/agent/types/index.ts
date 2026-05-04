@@ -71,8 +71,6 @@ export interface AgentConfig {
   llm?: LLMConfig;
   /** Database client for persistence. When provided, the agent persists messages automatically. */
   database?: WorkspaceDatabaseClient;
-  /** Conversation ID to persist messages to. Required when database is provided. */
-  conversationId?: string;
   /** Working directory for bash tool (defaults to process.cwd()) */
   cwd?: string;
   /** SkillManager instance — enables the skill tool when provided */

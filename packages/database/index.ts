@@ -3,7 +3,7 @@
  *
  * Two database types:
  * - Global: settings + migrations at ~/.openkrow/database/openkrow.db
- * - Workspace: conversations + messages at <workspace>/.krow/data.db
+ * - Workspace: messages at <workspace>/.krow/data.db
  */
 
 import { join } from "path";
@@ -11,7 +11,6 @@ import type { GlobalDatabaseClient, WorkspaceDatabaseClient, DatabaseConfig } fr
 import { openDatabase, getDefaultDatabasePath } from "./connection/index.js";
 import { runGlobalMigrations, runWorkspaceMigrations } from "./migrations/index.js";
 import {
-  ConversationRepository,
   MessageRepository,
   SettingsRepository,
 } from "./repositories/index.js";
@@ -33,7 +32,6 @@ export {
 
 // Repositories
 export {
-  ConversationRepository,
   MessageRepository,
   SettingsRepository,
 } from "./repositories/index.js";
@@ -42,15 +40,11 @@ export {
 export type {
   GlobalDatabaseClient,
   WorkspaceDatabaseClient,
-  Conversation,
   Message,
   Setting,
   Migration,
-  IConversationRepository,
   IMessageRepository,
   ISettingsRepository,
-  CreateConversationInput,
-  UpdateConversationInput,
   CreateMessageInput,
 } from "./types/index.js";
 
@@ -72,7 +66,7 @@ export function createGlobalClient(config?: DatabaseConfig): GlobalDatabaseClien
 }
 
 /**
- * Create a workspace database client (conversations + messages).
+ * Create a workspace database client (messages only).
  * Path: <workspacePath>/.krow/data.db
  */
 export function createWorkspaceClient(workspacePath: string): WorkspaceDatabaseClient {
@@ -81,7 +75,6 @@ export function createWorkspaceClient(workspacePath: string): WorkspaceDatabaseC
   runWorkspaceMigrations(db);
 
   return {
-    conversations: new ConversationRepository(db),
     messages: new MessageRepository(db),
   };
 }

@@ -25,20 +25,9 @@ export const GLOBAL_SCHEMA = {
 };
 
 export const WORKSPACE_SCHEMA = {
-  conversations: `
-    CREATE TABLE IF NOT EXISTS conversations (
-      id TEXT PRIMARY KEY,
-      title TEXT,
-      created_at TEXT NOT NULL DEFAULT (datetime('now')),
-      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
-    );
-    CREATE INDEX IF NOT EXISTS idx_conversations_created_at ON conversations(created_at);
-  `,
-
   messages: `
     CREATE TABLE IF NOT EXISTS messages (
       id TEXT PRIMARY KEY,
-      conversation_id TEXT NOT NULL,
       role TEXT NOT NULL CHECK(role IN ('user', 'assistant', 'system', 'tool', 'snip', 'summary')),
       content TEXT NOT NULL,
       tool_calls TEXT,
@@ -46,10 +35,8 @@ export const WORKSPACE_SCHEMA = {
       tool_name TEXT,
       is_error INTEGER DEFAULT 0,
       metadata TEXT,
-      created_at TEXT NOT NULL DEFAULT (datetime('now')),
-      FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
-    CREATE INDEX IF NOT EXISTS idx_messages_conversation_id ON messages(conversation_id);
     CREATE INDEX IF NOT EXISTS idx_messages_created_at ON messages(created_at);
   `,
 

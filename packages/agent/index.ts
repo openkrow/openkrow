@@ -82,10 +82,9 @@ export class Agent {
       questionHandler: config.questionHandler,
     });
 
-    // ContextManager owns persistence — pass database + conversationId + workspace
+    // ContextManager owns persistence — pass database + workspace
     this.context = new ContextManager({
       database: config.database,
-      conversationId: config.conversationId,
       workspace: config.workspace,
     });
 
@@ -261,6 +260,7 @@ export class Agent {
    * The loop continues while needsFollowUp is true (toolCall blocks observed).
    */
   async *stream(input: string, options?: RunOptions): AsyncGenerator<StreamEvent, void, unknown> {
+    console.log("Agent stream started with input:", input);
     if (this._isRunning) {
       throw new Error("Agent is already running");
     }

@@ -39,14 +39,10 @@ async function api<T = unknown>(
 // SSE streaming chat
 // ---------------------------------------------------------------------------
 
-async function streamChat(
-  message: string,
-  conversationId?: string,
-): Promise<string | undefined> {
+async function streamChat(message: string): Promise<void> {
   const body = JSON.stringify({
     message,
     stream: true,
-    conversationId,
   });
 
   const res = await fetch(`${ENDPOINT}/chat`, {
@@ -58,13 +54,12 @@ async function streamChat(
   if (!res.ok || !res.body) {
     const text = await res.text();
     console.error(`\x1b[31mError: ${res.status} ${text}\x1b[0m`);
-    return conversationId;
+    return;
   }
 
   const reader = res.body.getReader();
   const decoder = new TextDecoder();
   let buffer = "";
-  let convId = conversationId;
   let fullText = "";
 
   while (true) {
@@ -110,21 +105,17 @@ async function streamChat(
           break;
         }
 
+        case "error": {
+          const errMsg = typeof event.error === "string"
+            ? event.error
+            : event.error instanceof Error
+              ? event.error.message
+              : JSON.stringify(event.error) === "{}" ? "Unknown error" : JSON.stringify(event.error);
+          console.error(`\n\x1b[31m[error] ${errMsg}\x1b[0m`);
+          break;
+        }
+
         case "message":
-          // Conversation ID comes from the message event
-          if (
-            event.message &&
-            typeof event.message === "object" &&
-            "conversationId" in (event.message as object)
-          ) {
-            convId = (event.message as { conversationId: string }).conversationId;
-          }
-          break;
-
-        case "error":
-          console.error(`\n\x1b[31m[error] ${event.error}\x1b[0m`);
-          break;
-
         case "done":
           break;
       }
@@ -132,27 +123,26 @@ async function streamChat(
   }
 
   if (fullText) console.log(); // newline after streamed text
-  return convId;
 }
 
 // ---------------------------------------------------------------------------
 // Slash commands
 // ---------------------------------------------------------------------------
 
-async function handleCommand(input: string): Promise<boolean> {
+async function handleCommand(input: string): Promise<void> {
   const [cmd, ...rest] = input.trim().split(/\s+/);
 
   switch (cmd) {
     case "/health": {
       const h = await api("/health");
       console.log(JSON.stringify(h, null, 2));
-      return true;
+      return;
     }
 
     case "/models": {
       const m = await api("/models");
       console.log(JSON.stringify(m, null, 2));
-      return true;
+      return;
     }
 
     case "/model": {
@@ -167,13 +157,13 @@ async function handleCommand(input: string): Promise<boolean> {
         const m = await api("/config/model");
         console.log(JSON.stringify(m, null, 2));
       }
-      return true;
+      return;
     }
 
     case "/keys": {
       const k = await api("/auth/keys");
       console.log(JSON.stringify(k, null, 2));
-      return true;
+      return;
     }
 
     case "/key": {
@@ -187,17 +177,20 @@ async function handleCommand(input: string): Promise<boolean> {
       } else {
         console.log("Usage: /key <provider> <apiKey>");
       }
-      return true;
+      return;
     }
 
-    case "/conversations": {
-      const c = await api("/conversations");
+    case "/history": {
+      const h = await api("/history");
+      console.log(JSON.stringify(h, null, 2));
+      return;
+    }
+
+    case "/cancel": {
+      const c = await api("/chat/cancel", { method: "POST" });
       console.log(JSON.stringify(c, null, 2));
-      return true;
+      return;
     }
-
-    case "/new":
-      return false; // handled by caller to reset conversationId
 
     case "/help":
       console.log(`
@@ -208,19 +201,19 @@ Commands:
   /model <prov> <mod>  - Set model
   /keys                - List stored API keys
   /key <prov> <key>    - Store an API key
-  /conversations       - List conversations
-  /new                 - Start a new conversation
+  /history             - Show message history
+  /cancel              - Cancel active request
   /help                - Show this help
   /quit                - Exit
 `);
-      return true;
+      return;
 
     case "/quit":
     case "/exit":
       process.exit(0);
 
     default:
-      return false;
+      console.log(`Unknown command: ${cmd}. Type /help for available commands.`);
   }
 }
 
@@ -243,24 +236,16 @@ async function main() {
     output: process.stdout,
   });
 
-  let conversationId: string | undefined;
-
   const prompt = () => {
-    const tag = conversationId ? `\x1b[2m(${conversationId.slice(0, 8)})\x1b[0m ` : "";
-    rl.question(`${tag}\x1b[1myou>\x1b[0m `, async (input) => {
+    rl.question(`\x1b[1myou>\x1b[0m `, async (input) => {
       input = input.trim();
       if (!input) return prompt();
 
       try {
         if (input.startsWith("/")) {
-          if (input.startsWith("/new")) {
-            conversationId = undefined;
-            console.log("Started new conversation");
-          } else {
-            await handleCommand(input);
-          }
+          await handleCommand(input);
         } else {
-          conversationId = await streamChat(input, conversationId);
+          await streamChat(input);
         }
       } catch (e) {
         console.error(`\x1b[31m${e}\x1b[0m`);

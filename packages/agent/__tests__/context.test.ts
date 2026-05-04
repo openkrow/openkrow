@@ -367,7 +367,6 @@ function createMockDatabaseClient(): { client: WorkspaceDatabaseClient; store: D
     create(input: CreateMessageInput): DbMessage {
       const msg: DbMessage = {
         id: `msg_${++idCounter}`,
-        conversation_id: input.conversation_id,
         role: input.role,
         content: input.content,
         tool_calls: input.tool_calls ? JSON.stringify(input.tool_calls) : undefined,
@@ -380,22 +379,17 @@ function createMockDatabaseClient(): { client: WorkspaceDatabaseClient; store: D
       store.push(msg);
       return msg;
     },
-    findByConversationId(conversationId: string, _limit?: number): DbMessage[] {
-      return store.filter(m => m.conversation_id === conversationId);
-    },
     findById(_id: string): DbMessage | null { return null; },
     findAll(): DbMessage[] { return store; },
     deleteById(_id: string): boolean { return false; },
     count(): number { return store.length; },
-    getLastMessages(_cid: string, _n: number): DbMessage[] { return []; },
-    countByConversationId(_cid: string): number { return 0; },
-    deleteByConversationId(_cid: string): number { return 0; },
+    getLastMessages(_n: number): DbMessage[] { return []; },
+    deleteAll(): number { return 0; },
     searchByContent(_q: string): DbMessage[] { return []; },
   };
 
-  const client = {
+  const client: WorkspaceDatabaseClient = {
     messages: mockMessages,
-    conversations: {} as WorkspaceDatabaseClient["conversations"],
   };
 
   return { client, store };
@@ -408,19 +402,18 @@ function createMockDatabaseClient(): { client: WorkspaceDatabaseClient; store: D
 describe("ContextManager — persistence", () => {
   it("should persist user messages to database", () => {
     const { client, store } = createMockDatabaseClient();
-    const cm = new ContextManager({ database: client, conversationId: "conv_1" });
+    const cm = new ContextManager({ database: client });
 
     cm.addMessage(makeUserMsg("Hello from persistence test"));
 
     assert.equal(store.length, 1);
     assert.equal(store[0]!.role, "user");
     assert.equal(store[0]!.content, "Hello from persistence test");
-    assert.equal(store[0]!.conversation_id, "conv_1");
   });
 
   it("should persist assistant messages with tool calls", () => {
     const { client, store } = createMockDatabaseClient();
-    const cm = new ContextManager({ database: client, conversationId: "conv_1" });
+    const cm = new ContextManager({ database: client });
 
     const msg: Omit<AssistantMessage, "timestamp"> = {
       role: "assistant",
@@ -441,7 +434,7 @@ describe("ContextManager — persistence", () => {
 
   it("should persist tool result messages", () => {
     const { client, store } = createMockDatabaseClient();
-    const cm = new ContextManager({ database: client, conversationId: "conv_1" });
+    const cm = new ContextManager({ database: client });
 
     cm.addMessage(makeToolResult("file contents here", "tc_1", "read_file"));
 
@@ -462,20 +455,18 @@ describe("ContextManager — persistence", () => {
 
     store.push({
       id: "msg_prev_1",
-      conversation_id: "conv_1",
       role: "user",
       content: "Previous message from earlier session",
       created_at: new Date(Date.now() - 60000).toISOString(),
     });
     store.push({
       id: "msg_prev_2",
-      conversation_id: "conv_1",
       role: "assistant",
       content: "Previous response",
       created_at: new Date(Date.now() - 59000).toISOString(),
     });
 
-    const cm = new ContextManager({ database: client, conversationId: "conv_1" });
+    const cm = new ContextManager({ database: client });
     cm.setCustomPrompt("test");
 
     cm.addMessage(makeUserMsg("New message"));
@@ -491,7 +482,6 @@ describe("ContextManager — persistence", () => {
 
     store.push({
       id: "msg_t1",
-      conversation_id: "conv_1",
       role: "tool",
       content: "file contents",
       tool_call_id: "tc_99",
@@ -500,7 +490,7 @@ describe("ContextManager — persistence", () => {
       created_at: new Date().toISOString(),
     });
 
-    const cm = new ContextManager({ database: client, conversationId: "conv_1" });
+    const cm = new ContextManager({ database: client });
     cm.setCustomPrompt("test");
 
     const result = await cm.contextAssembly(defaultOptions);
