@@ -1,24 +1,33 @@
 {
   "name": "openkrow",
-  "private": true,
-  "workspaces": [
-    "packages/*",
-    "apps/*"
-  ],
+  "version": "0.1.0",
+  "description": "OpenKrow - Open-source AI assistant for office workers, students, and researchers",
+  "type": "module",
+  "main": "./dist/index.js",
+  "bin": {
+    "krow": "./dist/index.js"
+  },
   "scripts": {
-    "build": "turbo run build",
-    "dev": "turbo run dev",
-    "lint": "turbo run lint",
-    "test": "turbo run test",
-    "typecheck": "turbo run typecheck",
-    "clean": "turbo run clean && rm -rf node_modules"
+    "build": "tsc && cp -r agent/context/prompt dist/agent/context/prompt && cp agent/tools/*.txt dist/agent/tools/",
+    "dev": "tsc --watch",
+    "clean": "rm -rf dist",
+    "typecheck": "tsc --noEmit",
+    "test": "bun test agent/__tests__ config/src/__tests__ skill/src/__tests__",
+    "start": "bun run dist/index.js"
+  },
+  "dependencies": {
+    "@mariozechner/pi-ai": "^0.70.5"
   },
   "devDependencies": {
-    "turbo": "^2.4.0",
+    "@types/node": "^22.12.0",
+    "bun-types": "^1.1.0",
     "typescript": "^5.7.0"
+  },
+  "peerDependencies": {
+    "bun": ">=1.0.0"
   },
   "engines": {
     "node": ">=20"
   },
-  "packageManager": "bun@1.3.8"
+  "license": "MIT"
 }
