@@ -125,5 +125,7 @@ export function assembleSystemPrompt(options: PromptAssemblyOptions = {}): strin
     sections.push(customSuffix.trim());
   }
 
+  console.log(sections)
+
   return sections.join("\n\n");
 }

@@ -77,6 +77,20 @@ export interface OAuthInfo {
 }
 
 // ---------------------------------------------------------------------------
+// Validation
+// ---------------------------------------------------------------------------
+
+/** Thrown when a configuration value fails validation. */
+export class ConfigValidationError extends Error {
+  readonly code: string;
+  constructor(message: string, code: string) {
+    super(message);
+    this.name = "ConfigValidationError";
+    this.code = code;
+  }
+}
+
+// ---------------------------------------------------------------------------
 // General settings
 // ---------------------------------------------------------------------------
 

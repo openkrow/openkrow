@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach } from "bun:test";
 import { ConfigManager } from "../config-manager.js";
+import { ConfigValidationError } from "../types.js";
 import type { ISettingsRepository } from "@openkrow/database";
 import type { Setting } from "@openkrow/database";
 
@@ -84,10 +85,24 @@ describe("ConfigManager", () => {
       expect(info!.name).toContain("Claude");
     });
 
-    it("getActiveModelInfo returns undefined for unknown model", () => {
-      config.setActiveModel({ provider: "openai", model: "nonexistent-model" });
+    it("getActiveModelInfo returns undefined for unknown model when set directly via DB", () => {
+      // Bypass validation by writing directly to settings
+      settings.set("config:model.provider", "openai");
+      settings.set("config:model.id", "nonexistent-model");
       const info = config.getActiveModelInfo();
       expect(info).toBeUndefined();
+    });
+
+    it("throws ConfigValidationError for unknown provider", () => {
+      expect(() => {
+        config.setActiveModel({ provider: "fake-provider" as any, model: "some-model" });
+      }).toThrow(ConfigValidationError);
+    });
+
+    it("throws ConfigValidationError for unknown model", () => {
+      expect(() => {
+        config.setActiveModel({ provider: "openai", model: "nonexistent-model" });
+      }).toThrow(ConfigValidationError);
     });
   });
 
@@ -111,6 +126,30 @@ describe("ConfigManager", () => {
       config.setModelOverrides("openai", "gpt-4o", { temperature: 0.5 });
       expect(config.removeModelOverrides("openai", "gpt-4o")).toBe(true);
       expect(config.getModelOverrides("openai", "gpt-4o")).toBeNull();
+    });
+
+    it("throws for temperature out of range", () => {
+      expect(() => {
+        config.setModelOverrides("anthropic", "claude-sonnet-4-20250514", { temperature: 3 });
+      }).toThrow(ConfigValidationError);
+      expect(() => {
+        config.setModelOverrides("anthropic", "claude-sonnet-4-20250514", { temperature: -1 });
+      }).toThrow(ConfigValidationError);
+    });
+
+    it("throws for invalid maxTokens", () => {
+      expect(() => {
+        config.setModelOverrides("anthropic", "claude-sonnet-4-20250514", { maxTokens: 0 });
+      }).toThrow(ConfigValidationError);
+      expect(() => {
+        config.setModelOverrides("anthropic", "claude-sonnet-4-20250514", { maxTokens: 1.5 });
+      }).toThrow(ConfigValidationError);
+    });
+
+    it("throws for invalid baseUrl", () => {
+      expect(() => {
+        config.setModelOverrides("anthropic", "claude-sonnet-4-20250514", { baseUrl: "not-a-url" });
+      }).toThrow(ConfigValidationError);
     });
   });
 
@@ -146,9 +185,28 @@ describe("ConfigManager", () => {
     });
 
     it("masks short keys properly", () => {
-      config.setApiKey("test", "short");
+      // Use a known provider with a short key
+      config.setApiKey("anthropic", "short");
       const keys = config.listApiKeys();
-      expect(keys[0].masked).toBe("****");
+      expect(keys[0]!.masked).toBe("****");
+    });
+
+    it("throws ConfigValidationError for unknown provider", () => {
+      expect(() => {
+        config.setApiKey("fake-provider", "sk-xxx");
+      }).toThrow(ConfigValidationError);
+    });
+
+    it("throws ConfigValidationError for empty API key", () => {
+      expect(() => {
+        config.setApiKey("anthropic", "");
+      }).toThrow(ConfigValidationError);
+    });
+
+    it("throws ConfigValidationError for empty provider", () => {
+      expect(() => {
+        config.setApiKey("", "sk-xxx");
+      }).toThrow(ConfigValidationError);
     });
   });
 
@@ -250,6 +308,12 @@ describe("ConfigManager", () => {
     it("stores and retrieves max turns", () => {
       config.setMaxTurns(50);
       expect(config.getMaxTurns()).toBe(50);
+    });
+
+    it("throws for invalid max turns", () => {
+      expect(() => config.setMaxTurns(0)).toThrow(ConfigValidationError);
+      expect(() => config.setMaxTurns(-5)).toThrow(ConfigValidationError);
+      expect(() => config.setMaxTurns(1.5)).toThrow(ConfigValidationError);
     });
   });
 

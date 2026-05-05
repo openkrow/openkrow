@@ -9,6 +9,7 @@
 import {
   stream as piAiStream,
   complete as piAiComplete,
+  getModel,
   getModels,
   getProviders,
 } from "@mariozechner/pi-ai";
@@ -42,18 +43,6 @@ import { toLLMMessages, extractToolCalls, hasToolCalls, getTextContent } from ".
 // ---------------------------------------------------------------------------
 
 /**
- * Find a model by ID across all providers (pi-ai doesn't have getModelById).
- */
-function getModelById(modelId: string): Model<any> | undefined {
-  for (const provider of getProviders()) {
-    const models = getModels(provider);
-    const found = models.find((m: Model<any>) => m.id === modelId);
-    if (found) return found;
-  }
-  return undefined;
-}
-
-/**
  * Get all registered models across all providers.
  */
 function getAllModels(): Model<any>[] {
@@ -82,10 +71,9 @@ export class Agent {
       questionHandler: config.questionHandler,
     });
 
-    // ContextManager owns persistence — pass database + conversationId + workspace
+    // ContextManager owns persistence — pass database + workspace
     this.context = new ContextManager({
       database: config.database,
-      conversationId: config.conversationId,
       workspace: config.workspace,
     });
 
@@ -112,7 +100,7 @@ export class Agent {
    * context window overflows past all other compaction phases.
    */
   private configureSummarizer(llmConfig: LLMConfig): void {
-    const model = getModelById(llmConfig.model);
+    const model = getModel(llmConfig.provider as any, llmConfig.model as any);
     if (!model) return;
 
     const streamOpts: PiAiStreamOptions & Record<string, unknown> = {
@@ -161,9 +149,10 @@ export class Agent {
    * Resolve the LLM Model object. Throws if not found.
    */
   private resolveModel(llmConfig: LLMConfig): Model<any> {
-    const model = getModelById(llmConfig.model);
+    // Use provider-scoped lookup to avoid cross-provider collisions
+    const model = getModel(llmConfig.provider as any, llmConfig.model as any);
     if (!model) {
-      throw new Error(`Model "${llmConfig.model}" not found in the model registry.`);
+      throw new Error(`Model "${llmConfig.model}" not found for provider "${llmConfig.provider}".`);
     }
     return model;
   }
@@ -176,6 +165,7 @@ export class Agent {
       apiKey: llmConfig.apiKey,
       temperature: llmConfig.temperature,
       maxTokens: llmConfig.maxTokens,
+      
       signal,
     };
   }
@@ -183,10 +173,11 @@ export class Agent {
   /**
    * Build ContextAssemblyOptions from the model and registered tools.
    */
-  private buildAssemblyOptions(model: Model<any>): ContextAssemblyOptions {
+  private buildAssemblyOptions(model: Model<any>, llmConfig: LLMConfig): ContextAssemblyOptions {
     return {
       contextWindow: model.contextWindow,
       maxOutputTokens: model.maxTokens,
+      provider: llmConfig.provider as any,
       tools: this.tools.getDefinitions(),
     };
   }
@@ -285,7 +276,7 @@ export class Agent {
         }
 
         // 1. Context Assembly
-        const assembled = await this.context.contextAssembly(this.buildAssemblyOptions(model));
+        const assembled = await this.context.contextAssembly(this.buildAssemblyOptions(model, llmConfig));
         const llmMessages = toLLMMessages(assembled.messages);
         const context: PiAiContext = {
           systemPrompt: assembled.systemPrompt,
@@ -308,7 +299,7 @@ export class Agent {
               // Tool call events will be yielded during execution below
               break;
             case "error":
-              yield { type: "error", error: new Error(event.error.errorMessage ?? "LLM stream error") };
+              yield { type: "error", error: event.error.errorMessage ?? "LLM stream error" };
               break;
           }
         }

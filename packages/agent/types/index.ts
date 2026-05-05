@@ -71,8 +71,6 @@ export interface AgentConfig {
   llm?: LLMConfig;
   /** Database client for persistence. When provided, the agent persists messages automatically. */
   database?: WorkspaceDatabaseClient;
-  /** Conversation ID to persist messages to. Required when database is provided. */
-  conversationId?: string;
   /** Working directory for bash tool (defaults to process.cwd()) */
   cwd?: string;
   /** SkillManager instance — enables the skill tool when provided */
@@ -221,6 +219,8 @@ export interface ContextAssemblyOptions {
   contextWindow: number;
   /** Maximum output tokens reserved for the response */
   maxOutputTokens: number;
+  /** LLM provider — used to select provider-specific system prompt */
+  provider?: KnownProvider;
   /** Available tools (their definitions contribute to token budget) */
   tools?: ToolDefinition[];
   /**
@@ -259,5 +259,5 @@ export type StreamEvent =
   | { type: "tool_call"; id: string; name: string; arguments: Record<string, unknown> }
   | { type: "tool_result"; toolCallId: string; toolName: string; success: boolean; output: string }
   | { type: "message"; message: Message }
-  | { type: "error"; error: Error }
+  | { type: "error"; error: string }
   | { type: "done" };

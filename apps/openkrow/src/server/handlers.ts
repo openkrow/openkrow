@@ -11,27 +11,20 @@ import type {
 } from "./types.js";
 
 /**
- * Handle chat request
+ * Handle chat request (non-streaming)
  */
 export async function handleChat(
   orchestrator: Orchestrator,
   request: ChatRequest,
 ): Promise<ChatResponse> {
-  let conversationId = request.conversationId;
-  if (!conversationId) {
-    const conversation = orchestrator.getOrCreateConversation();
-    conversationId = conversation.id;
-  }
-
   const overrides = (request.provider || request.model)
     ? { provider: request.provider, model: request.model }
     : undefined;
 
-  const result = await orchestrator.chat(conversationId, request.message, overrides);
+  const result = await orchestrator.chat(request.message, overrides);
 
   return {
     response: result.response,
-    conversationId,
     messageId: result.messageId,
   };
 }
@@ -43,17 +36,11 @@ export async function* handleStreamChat(
   orchestrator: Orchestrator,
   request: ChatRequest,
 ): AsyncGenerator<StreamEvent, ChatResponse, unknown> {
-  let conversationId = request.conversationId;
-  if (!conversationId) {
-    const conversation = orchestrator.getOrCreateConversation();
-    conversationId = conversation.id;
-  }
-
   const overrides = (request.provider || request.model)
     ? { provider: request.provider, model: request.model }
     : undefined;
 
-  const generator = orchestrator.streamChat(conversationId, request.message, overrides);
+  const generator = orchestrator.streamChat(request.message, overrides);
   let result: { messageId: string } | undefined;
 
   while (true) {
@@ -67,7 +54,6 @@ export async function* handleStreamChat(
 
   return {
     response: "",
-    conversationId,
     messageId: result?.messageId ?? "",
   };
 }
@@ -118,7 +104,6 @@ export function validateChatRequest(body: unknown): {
     valid: true,
     data: {
       message: data.message,
-      conversationId: typeof data.conversationId === "string" ? data.conversationId : undefined,
       stream: typeof data.stream === "boolean" ? data.stream : false,
       provider: typeof data.provider === "string" ? data.provider : undefined,
       model: typeof data.model === "string" ? data.model : undefined,

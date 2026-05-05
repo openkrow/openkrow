@@ -18,7 +18,7 @@
  * IMPORTANT: The original messages are NEVER mutated during assembly.
  */
 
-import type { TextContent, ThinkingContent, ToolCall } from "@mariozechner/pi-ai";
+import type { TextContent, ThinkingContent, ToolCall, KnownProvider } from "@mariozechner/pi-ai";
 import type { AssistantContentPart } from "../types/index.js";
 import type { WorkspaceDatabaseClient } from "@openkrow/database";
 import type { Message as DbMessage } from "@openkrow/database";
@@ -63,7 +63,6 @@ const COLLAPSE_MIN_BLOCK_SIZE = 3;
 
 export interface ContextManagerOptions {
   database?: WorkspaceDatabaseClient;
-  conversationId?: string;
   /** Optional summarizer for Phase 5 auto-compaction. Set via `setSummarizer()`. */
   summarizer?: SummarizerFn;
   /** Optional WorkspaceManager — context.md is injected into the system prompt */
@@ -75,13 +74,11 @@ export class ContextManager {
   private promptOptions: PromptAssemblyOptions = {};
   private customPromptOverride: string | undefined;
   private database: WorkspaceDatabaseClient | undefined;
-  private conversationId: string | undefined;
   private summarizer: SummarizerFn | undefined;
   private workspace: WorkspaceManager | undefined;
 
   constructor(options?: ContextManagerOptions) {
     this.database = options?.database;
-    this.conversationId = options?.conversationId;
     this.summarizer = options?.summarizer;
     this.workspace = options?.workspace;
   }
@@ -89,17 +86,16 @@ export class ContextManager {
   // ---- Persistence configuration ----
 
   /**
-   * Set or update the database client and conversation ID.
+   * Set or update the database client.
    */
   configure(options: ContextManagerOptions): void {
     if (options.database !== undefined) this.database = options.database;
-    if (options.conversationId !== undefined) this.conversationId = options.conversationId;
     if (options.summarizer !== undefined) this.summarizer = options.summarizer;
     if (options.workspace !== undefined) this.workspace = options.workspace;
   }
 
   get isPersistedMode(): boolean {
-    return this.database !== undefined && this.conversationId !== undefined;
+    return this.database !== undefined;
   }
 
   // ---- Summarizer ----
@@ -132,11 +128,12 @@ export class ContextManager {
     this.customPromptOverride = prompt;
   }
 
-  getSystemPrompt(): string {
+  getSystemPrompt(provider?: KnownProvider): string {
     if (this.customPromptOverride !== undefined) return this.customPromptOverride;
 
     // Refresh workspace context from disk before each assembly
     const opts = { ...this.promptOptions };
+    if (provider) opts.provider = provider;
     if (this.workspace?.isLoaded()) {
       this.workspace.refreshContext();
       const ctx = this.workspace.getContext();
@@ -204,7 +201,7 @@ export class ContextManager {
       this.promptOptions.hasTools = true;
     }
 
-    const systemPrompt = this.getSystemPrompt();
+    const systemPrompt = this.getSystemPrompt(options.provider);
     const systemTokens = systemPrompt ? estimateTokens(systemPrompt) : 0;
     const toolTokens = estimateToolDefinitionTokens(tools);
     const effectiveBudget = contextWindow - maxOutputTokens - reservedBuffer - systemTokens - toolTokens;
@@ -296,7 +293,6 @@ export class ContextManager {
    */
   private persistMessage(msg: Message): void {
     const db = this.database!;
-    const conversationId = this.conversationId!;
 
     switch (msg.role) {
       case "user": {
@@ -304,7 +300,6 @@ export class ContextManager {
           ? msg.content
           : msg.content.map(p => p.type === "text" ? p.text : `[${p.type}]`).join("\n");
         db.messages.create({
-          conversation_id: conversationId,
           role: "user",
           content,
         });
@@ -315,7 +310,6 @@ export class ContextManager {
         const textContent = textParts.map(p => (p as { type: "text"; text: string }).text).join("\n");
         const toolCallParts = msg.content.filter(p => p.type === "toolCall");
         db.messages.create({
-          conversation_id: conversationId,
           role: "assistant",
           content: textContent,
           tool_calls: toolCallParts.length > 0
@@ -329,7 +323,6 @@ export class ContextManager {
       }
       case "tool": {
         db.messages.create({
-          conversation_id: conversationId,
           role: "tool",
           content: msg.content,
           tool_call_id: msg.toolCallId,
@@ -340,7 +333,6 @@ export class ContextManager {
       }
       case "snip": {
         db.messages.create({
-          conversation_id: conversationId,
           role: "snip",
           content: "",
           metadata: { droppedCount: msg.droppedCount, tokensFreed: msg.tokensFreed },
@@ -349,7 +341,6 @@ export class ContextManager {
       }
       case "summary": {
         db.messages.create({
-          conversation_id: conversationId,
           role: "summary",
           content: msg.content,
           metadata: { summarizedCount: msg.summarizedCount, tokensFreed: msg.tokensFreed },
@@ -365,9 +356,8 @@ export class ContextManager {
    */
   private loadMessagesFromDatabase(): void {
     const db = this.database!;
-    const conversationId = this.conversationId!;
 
-    const dbMessages = db.messages.findByConversationId(conversationId);
+    const dbMessages = db.messages.findAll();
     this.messages = dbMessages.map(row => this.dbRowToAgentMessage(row));
   }
 

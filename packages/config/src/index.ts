@@ -10,6 +10,7 @@ export { ConfigManager } from "./config-manager.js";
 
 export {
   SETTING_KEYS,
+  ConfigValidationError,
   type ModelConfig,
   type ModelOverrides,
   type ApiKeyEntry,

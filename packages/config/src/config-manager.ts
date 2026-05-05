@@ -17,6 +17,7 @@ import {
 
 import {
   SETTING_KEYS,
+  ConfigValidationError,
   type ModelConfig,
   type ModelOverrides,
   type ApiKeyEntry,
@@ -73,8 +74,25 @@ export class ConfigManager {
     };
   }
 
-  /** Set the active model. */
+  /** Set the active model. Validates provider and model exist in the registry. */
   setActiveModel(config: ModelConfig): void {
+    const providers = getProviders();
+    if (!providers.includes(config.provider)) {
+      throw new ConfigValidationError(
+        `Unknown provider: "${config.provider}". Valid providers: ${providers.join(", ")}`,
+        "INVALID_PROVIDER",
+      );
+    }
+
+    const model = getModel(config.provider as any, config.model as any);
+    if (!model) {
+      const available = getModels(config.provider).map((m: Model<any>) => m.id);
+      throw new ConfigValidationError(
+        `Unknown model "${config.model}" for provider "${config.provider}". Available: ${available.join(", ")}`,
+        "INVALID_MODEL",
+      );
+    }
+
     this.settings.set(SETTING_KEYS.MODEL_PROVIDER, config.provider);
     this.settings.set(SETTING_KEYS.MODEL_ID, config.model);
   }
@@ -104,12 +122,36 @@ export class ConfigManager {
     );
   }
 
-  /** Set overrides for a specific model. */
+  /** Set overrides for a specific model. Validates override values. */
   setModelOverrides(
     provider: string,
     modelId: string,
     overrides: ModelOverrides
   ): void {
+    if (overrides.temperature !== undefined) {
+      if (typeof overrides.temperature !== "number" || overrides.temperature < 0 || overrides.temperature > 2) {
+        throw new ConfigValidationError("Temperature must be a number between 0 and 2", "INVALID_TEMPERATURE");
+      }
+    }
+    if (overrides.maxTokens !== undefined) {
+      if (typeof overrides.maxTokens !== "number" || overrides.maxTokens <= 0 || !Number.isInteger(overrides.maxTokens)) {
+        throw new ConfigValidationError("maxTokens must be a positive integer", "INVALID_MAX_TOKENS");
+      }
+    }
+    if (overrides.maxTurns !== undefined) {
+      if (typeof overrides.maxTurns !== "number" || overrides.maxTurns <= 0 || !Number.isInteger(overrides.maxTurns)) {
+        throw new ConfigValidationError("maxTurns must be a positive integer", "INVALID_MAX_TURNS");
+      }
+    }
+    if (overrides.baseUrl !== undefined) {
+      if (typeof overrides.baseUrl !== "string" || !overrides.baseUrl.trim()) {
+        throw new ConfigValidationError("baseUrl must be a non-empty string", "INVALID_BASE_URL");
+      }
+      try { new URL(overrides.baseUrl); } catch {
+        throw new ConfigValidationError(`Invalid baseUrl: "${overrides.baseUrl}"`, "INVALID_BASE_URL");
+      }
+    }
+
     this.settings.setJson(
       this.modelOverridesKey(provider, modelId),
       overrides
@@ -148,8 +190,23 @@ export class ConfigManager {
     return `${SETTING_KEYS.API_KEY_PREFIX}${provider}`;
   }
 
-  /** Store an API key for a provider. */
+  /** Store an API key for a provider. Validates provider and key. */
   setApiKey(provider: string, apiKey: string): void {
+    if (!provider || !provider.trim()) {
+      throw new ConfigValidationError("Provider name is required", "INVALID_PROVIDER");
+    }
+    if (!apiKey || !apiKey.trim()) {
+      throw new ConfigValidationError("API key cannot be empty", "EMPTY_API_KEY");
+    }
+
+    const providers = getProviders();
+    if (!providers.includes(provider as KnownProvider)) {
+      throw new ConfigValidationError(
+        `Unknown provider: "${provider}". Valid providers: ${providers.join(", ")}`,
+        "INVALID_PROVIDER",
+      );
+    }
+
     const entry: ApiKeyEntry = {
       provider,
       apiKey,
@@ -299,8 +356,11 @@ export class ConfigManager {
     return isNaN(n) ? DEFAULT_MAX_TURNS : n;
   }
 
-  /** Set the max turns setting. */
+  /** Set the max turns setting. Validates positive integer. */
   setMaxTurns(turns: number): void {
+    if (typeof turns !== "number" || turns <= 0 || !Number.isInteger(turns)) {
+      throw new ConfigValidationError("maxTurns must be a positive integer", "INVALID_MAX_TURNS");
+    }
     this.settings.set(SETTING_KEYS.MAX_TURNS, String(turns));
   }
 

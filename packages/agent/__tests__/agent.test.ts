@@ -156,7 +156,7 @@ describe("Agent construction", () => {
       name: "test-agent",
       llm: { provider: "anthropic", model: "nonexistent-model-xyz" },
     });
-    await assert.rejects(() => agent.run("hello"), /not found in the model registry/);
+    await assert.rejects(() => agent.run("hello"), /not found for provider/);
   });
 
   it("should throw if run() called while already running", async () => {

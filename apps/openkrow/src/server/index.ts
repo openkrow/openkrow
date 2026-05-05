@@ -5,6 +5,7 @@
  */
 
 import { Orchestrator } from "../orchestrator/index.js";
+import { ConfigValidationError } from "@openkrow/config";
 import {
   handleChat,
   handleStreamChat,
@@ -197,22 +198,7 @@ export class OpenKrowServer {
               );
             }
 
-            const body = await req.json().catch(() => null);
-            if (
-              !body ||
-              typeof body !== "object" ||
-              !("conversationId" in body) ||
-              typeof (body as { conversationId: string }).conversationId !== "string"
-            ) {
-              return Response.json(
-                { error: "conversationId is required", code: "INVALID_BODY" } as ErrorResponse,
-                { status: 400, headers: corsHeaders }
-              );
-            }
-
-            const cancelled = self.orchestrator.cancelRequest(
-              (body as { conversationId: string }).conversationId
-            );
+            const cancelled = self.orchestrator.cancelRequest();
 
             return Response.json(
               { ok: true, cancelled },
@@ -220,10 +206,10 @@ export class OpenKrowServer {
             );
           }
 
-          // Conversations list endpoint
+          // History endpoint — get workspace message history
           if (
-            path === "/conversations" ||
-            path === `${self.config.apiPrefix}/conversations`
+            path === "/history" ||
+            path === `${self.config.apiPrefix}/history`
           ) {
             if (req.method !== "GET") {
               return Response.json(
@@ -232,25 +218,8 @@ export class OpenKrowServer {
               );
             }
 
-            const limit = parseInt(url.searchParams.get("limit") ?? "10", 10);
-            const conversations = self.orchestrator.getRecentConversations(limit);
-
-            return Response.json({ conversations }, { headers: corsHeaders });
-          }
-
-          // Conversation history endpoint
-          const historyMatch = path.match(/^(?:\/api)?\/conversations\/([^/]+)\/messages$/);
-          if (historyMatch) {
-            if (req.method !== "GET") {
-              return Response.json(
-                { error: "Method not allowed", code: "METHOD_NOT_ALLOWED" } as ErrorResponse,
-                { status: 405, headers: corsHeaders }
-              );
-            }
-
-            const conversationId = historyMatch[1];
             const limit = parseInt(url.searchParams.get("limit") ?? "100", 10);
-            const messages = self.orchestrator.getConversationHistory(conversationId, limit);
+            const messages = self.orchestrator.getHistory(limit);
 
             return Response.json({ messages }, { headers: corsHeaders });
           }
@@ -288,7 +257,17 @@ export class OpenKrowServer {
               );
             }
             const { provider: prov, apiKey: key } = body as ApiKeySetRequest;
-            cm(self.orchestrator).setApiKey(prov, key);
+            try {
+              cm(self.orchestrator).setApiKey(prov, key);
+            } catch (err) {
+              if (err instanceof ConfigValidationError) {
+                return Response.json(
+                  { error: err.message, code: err.code } as ErrorResponse,
+                  { status: 400, headers: corsHeaders }
+                );
+              }
+              throw err;
+            }
             return Response.json({ ok: true, provider: prov }, { headers: corsHeaders });
           }
 
@@ -360,7 +339,17 @@ export class OpenKrowServer {
               );
             }
             const { provider: prov, model: mod } = body as ModelConfigSetRequest;
-            cm(self.orchestrator).setActiveModel({ provider: prov as any, model: mod });
+            try {
+              cm(self.orchestrator).setActiveModel({ provider: prov as any, model: mod });
+            } catch (err) {
+              if (err instanceof ConfigValidationError) {
+                return Response.json(
+                  { error: err.message, code: err.code } as ErrorResponse,
+                  { status: 400, headers: corsHeaders }
+                );
+              }
+              throw err;
+            }
             return Response.json({ ok: true, provider: prov, model: mod }, { headers: corsHeaders });
           }
 
@@ -387,8 +376,7 @@ export class OpenKrowServer {
     console.log(`  GET  /health                       - Health check (no auth)`);
     console.log(`  POST /chat                         - Send a message`);
     console.log(`  POST /chat/cancel                  - Cancel active request`);
-    console.log(`  GET  /conversations                - List conversations`);
-    console.log(`  GET  /conversations/:id/messages    - Conversation history`);
+    console.log(`  GET  /history                      - Message history`);
     console.log(`  GET  /auth/keys                    - List stored API keys`);
     console.log(`  POST /auth/keys                    - Store an API key`);
     console.log(`  DELETE /auth/keys/:provider         - Remove an API key`);
