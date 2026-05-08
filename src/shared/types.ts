@@ -73,6 +73,25 @@ export type SessionInfo = {
   updatedAt: number;
 };
 
+export type QuestionOption = {
+  label: string;
+  description: string;
+};
+
+export type QuestionInfo = {
+  question: string;
+  header: string;
+  options: QuestionOption[];
+  multiple?: boolean;
+  custom?: boolean;
+};
+
+export type QuestionRequest = {
+  id: string;
+  sessionID: string;
+  questions: QuestionInfo[];
+};
+
 export type KrowRPCSchema = {
   bun: {
     requests: {
@@ -104,6 +123,14 @@ export type KrowRPCSchema = {
         params: {};
         response: { models: ModelInfo[]; currentModel: string | null } | { error: string };
       };
+      replyQuestion: {
+        params: { requestId: string; answers: string[][] };
+        response: { success: boolean } | { error: string };
+      };
+      rejectQuestion: {
+        params: { requestId: string };
+        response: { success: boolean } | { error: string };
+      };
     };
     messages: {};
   };
@@ -116,6 +143,7 @@ export type KrowRPCSchema = {
       messageComplete: { sessionId: string; messageId: string };
       sessionStatus: { sessionId: string; status: "idle" | "busy" | "retry" };
       sessionError: { sessionId: string; error: string };
+      questionAsked: QuestionRequest;
     };
   };
 };

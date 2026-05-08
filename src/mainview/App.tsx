@@ -1,9 +1,10 @@
 import { useState, useEffect } from "react";
 import { rpc, onStreamEvent } from "./rpc";
-import type { ChatMessage, MessagePart, SessionInfo } from "../shared/types";
+import type { ChatMessage, MessagePart, SessionInfo, QuestionRequest } from "../shared/types";
 import MessageList from "./components/MessageList";
 import ChatInput from "./components/ChatInput";
 import SessionHistory from "./components/SessionHistory";
+import QuestionPrompt from "./components/QuestionPrompt";
 
 type AppState = "loading" | "ready" | "error";
 
@@ -15,6 +16,7 @@ export default function App() {
   const [sending, setSending] = useState(false);
   const [selectedModel, setSelectedModel] = useState<{ providerID: string; modelID: string } | null>({ providerID: "opencode", modelID: "big-pickle" });
   const [showHistory, setShowHistory] = useState(false);
+  const [activeQuestion, setActiveQuestion] = useState<QuestionRequest | null>(null);
 
   // Listen to streaming events
   useEffect(() => {
@@ -68,6 +70,10 @@ export default function App() {
         ...prev,
         { id: crypto.randomUUID(), role: "assistant", text: `Error: ${payload.error}`, createdAt: Date.now() },
       ]);
+    }));
+
+    unsubs.push(onStreamEvent("questionAsked", (payload: QuestionRequest) => {
+      setActiveQuestion(payload);
     }));
 
     return () => unsubs.forEach((fn) => fn());
@@ -193,8 +199,13 @@ export default function App() {
       {/* Messages */}
       <MessageList messages={messages} sending={sending} />
 
+      {/* Question prompt */}
+      {activeQuestion && (
+        <QuestionPrompt question={activeQuestion} onDismiss={() => setActiveQuestion(null)} />
+      )}
+
       {/* Input with model selector */}
-      <ChatInput onSend={handleSend} disabled={sending} onModelChange={setSelectedModel} />
+      <ChatInput onSend={handleSend} disabled={sending || !!activeQuestion} onModelChange={setSelectedModel} />
     </div>
   );
 }

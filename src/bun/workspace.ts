@@ -1,5 +1,5 @@
-import { createOpencode } from "@opencode-ai/sdk";
-import type { OpencodeClient } from "@opencode-ai/sdk";
+import { createOpencode } from "@opencode-ai/sdk/v2";
+import type { OpencodeClient } from "@opencode-ai/sdk/v2";
 import type { ChatMessage, MessagePart } from "../shared/types";
 import { krowAgent } from "./agent";
 import { EventStream, type RpcSend } from "./stream";
@@ -26,7 +26,6 @@ export class WorkspaceManager {
    * Start a workspace: boot opencode server, install skills, begin event stream.
    */
   async start(path: string): Promise<void> {
-    // Tear down previous workspace if any
     if (this.client) {
       this.stop();
     }
@@ -35,7 +34,6 @@ export class WorkspaceManager {
     this.abortController = new AbortController();
     process.chdir(path);
 
-    // Install skills in background
     SkillInstaller.install(path).catch((err: any) => {
       console.error("Failed to setup agent skills:", err?.message);
     });
@@ -74,21 +72,18 @@ export class WorkspaceManager {
 
   /**
    * Get or create a session for the current workspace directory.
-   * Returns the latest existing session or creates a new one.
    */
   async getOrCreateSession(): Promise<string> {
     if (!this.client) throw new Error("No workspace active");
 
-    const listRes = await this.client.session.list({
-      query: { directory: this.directory! },
-    });
+    const listRes = await this.client.session.list({ directory: this.directory! });
 
     if (listRes.data && listRes.data.length > 0) {
       const sorted = [...listRes.data].sort((a, b) => b.time.updated - a.time.updated);
       return sorted[0].id;
     }
 
-    const res = await this.client.session.create({ body: {} });
+    const res = await this.client.session.create({});
     if (!res.data) throw new Error("Failed to create session");
     return res.data.id;
   }
@@ -98,7 +93,7 @@ export class WorkspaceManager {
    */
   async createNewSession(): Promise<string> {
     if (!this.client) throw new Error("No workspace active");
-    const res = await this.client.session.create({ body: {} });
+    const res = await this.client.session.create({});
     if (!res.data) throw new Error("Failed to create session");
     return res.data.id;
   }
@@ -109,10 +104,7 @@ export class WorkspaceManager {
   async listSessions(): Promise<{ id: string; title: string; updatedAt: number }[]> {
     if (!this.client) throw new Error("No workspace active");
 
-    const listRes = await this.client.session.list({
-      query: { directory: this.directory! },
-    });
-
+    const listRes = await this.client.session.list({ directory: this.directory! });
     if (!listRes.data) return [];
 
     return [...listRes.data]
@@ -131,7 +123,7 @@ export class WorkspaceManager {
     if (!this.client) throw new Error("No workspace active");
 
     const history: ChatMessage[] = [];
-    const msgRes = await this.client.session.messages({ path: { id: sessionId } });
+    const msgRes = await this.client.session.messages({ sessionID: sessionId });
     if (!msgRes.data) return history;
 
     for (const msg of msgRes.data) {
@@ -163,12 +155,10 @@ export class WorkspaceManager {
     if (!this.client) throw new Error("No workspace active");
 
     await this.client.session.promptAsync({
-      path: { id: sessionId },
-      body: {
-        agent: "krow",
-        parts: [{ type: "text", text }],
-        model: model ?? { providerID: "opencode", modelID: "big-pickle" },
-      },
+      sessionID: sessionId,
+      agent: "krow",
+      parts: [{ type: "text", text }],
+      model: model ?? { providerID: "opencode", modelID: "big-pickle" },
     });
   }
 
@@ -182,7 +172,6 @@ export class WorkspaceManager {
     if (!res.data) throw new Error("Failed to fetch providers");
 
     const models: { id: string; name: string; providerID: string; providerName: string }[] = [];
-    console.log(res.data)
     for (const provider of res.data.providers) {
       for (const [modelId, model] of Object.entries(provider.models)) {
         models.push({ id: modelId, name: model.name, providerID: provider.id, providerName: provider.name });
@@ -191,6 +180,27 @@ export class WorkspaceManager {
 
     const currentModel = res.data.default?.["default"] ?? null;
     return { models, currentModel };
+  }
+
+  /**
+   * Reply to a question prompt.
+   */
+  async replyQuestion(requestId: string, answers: string[][]): Promise<void> {
+    if (!this.client) throw new Error("No workspace active");
+    await this.client.question.reply({
+      requestID: requestId,
+      answers,
+    });
+  }
+
+  /**
+   * Reject a question prompt.
+   */
+  async rejectQuestion(requestId: string): Promise<void> {
+    if (!this.client) throw new Error("No workspace active");
+    await this.client.question.reject({
+      requestID: requestId,
+    });
   }
 
   /**

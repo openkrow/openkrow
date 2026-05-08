@@ -1,11 +1,12 @@
-import type { OpencodeClient } from "@opencode-ai/sdk";
-import type { MessagePart } from "../shared/types";
+import type { OpencodeClient } from "@opencode-ai/sdk/v2";
+import type { MessagePart, QuestionRequest } from "../shared/types";
 
 export type RpcSend = {
   partUpdated: (payload: { sessionId: string; messageId: string; part: MessagePart; delta?: string }) => void;
   messageComplete: (payload: { sessionId: string; messageId: string }) => void;
   sessionStatus: (payload: { sessionId: string; status: "idle" | "busy" | "retry" }) => void;
   sessionError: (payload: { sessionId: string; error: string }) => void;
+  questionAsked: (payload: QuestionRequest) => void;
 };
 
 /**
@@ -45,6 +46,9 @@ export class EventStream {
         break;
       case "session.error":
         this.onSessionError(evt.properties);
+        break;
+      case "question.asked":
+        this.onQuestionAsked(evt.properties);
         break;
     }
   }
@@ -98,5 +102,13 @@ export class EventStream {
     const { sessionID, error } = props;
     const errorMsg = error?.data?.message ?? error?.name ?? "Unknown error";
     this.send.sessionError({ sessionId: sessionID ?? "", error: errorMsg });
+  }
+
+  private onQuestionAsked(props: any): void {
+    this.send.questionAsked({
+      id: props.id,
+      sessionID: props.sessionID,
+      questions: props.questions,
+    });
   }
 }

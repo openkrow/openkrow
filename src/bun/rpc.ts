@@ -81,6 +81,24 @@ export function createRpcHandler(workspace: WorkspaceManager, desktopPath: strin
             return { error: err?.message ?? String(err) };
           }
         },
+
+        replyQuestion: async ({ requestId, answers }) => {
+          try {
+            await workspace.replyQuestion(requestId, answers);
+            return { success: true };
+          } catch (err: any) {
+            return { error: err?.message ?? String(err) };
+          }
+        },
+
+        rejectQuestion: async ({ requestId }) => {
+          try {
+            await workspace.rejectQuestion(requestId);
+            return { success: true };
+          } catch (err: any) {
+            return { error: err?.message ?? String(err) };
+          }
+        },
       },
       messages: {},
     },

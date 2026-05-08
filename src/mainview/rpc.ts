@@ -38,6 +38,9 @@ export const rpc = Electroview.defineRPC<KrowRPCSchema>({
       sessionError: (payload) => {
         emit("sessionError", payload);
       },
+      questionAsked: (payload) => {
+        emit("questionAsked", payload);
+      },
     },
   },
 });
