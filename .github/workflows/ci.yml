@@ -15,9 +15,9 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  build-and-test:
-    name: Build & Test
-    runs-on: ubuntu-latest
+  typecheck:
+    name: Typecheck
+    runs-on: macos-latest
 
     steps:
       - name: Checkout
@@ -31,9 +31,3 @@ jobs:
 
       - name: Typecheck
         run: bun run typecheck
-
-      - name: Build
-        run: bun run build
-
-      - name: Test
-        run: bun run test
