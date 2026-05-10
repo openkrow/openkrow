@@ -4,8 +4,9 @@ import { WorkspaceManager } from "./workspace";
 
 /**
  * Creates the RPC handler for the Settings window.
+ * onSettingsChanged is called after any mutation to notify the main window.
  */
-export function createSettingsRpcHandler(workspace: WorkspaceManager) {
+export function createSettingsRpcHandler(workspace: WorkspaceManager, onSettingsChanged: () => void) {
   return BrowserView.defineRPC<SettingsRPCSchema>({
     maxRequestTime: 120000,
     handlers: {
@@ -21,6 +22,7 @@ export function createSettingsRpcHandler(workspace: WorkspaceManager) {
         setProviderAuth: async ({ providerID, auth }) => {
           try {
             await workspace.setProviderAuth(providerID, auth);
+            onSettingsChanged();
             return { success: true };
           } catch (err: any) {
             return { error: err?.message ?? String(err) };
@@ -38,6 +40,7 @@ export function createSettingsRpcHandler(workspace: WorkspaceManager) {
         completeProviderOAuth: async ({ providerID, methodIndex, code }) => {
           try {
             await workspace.completeProviderOAuth(providerID, methodIndex, code);
+            onSettingsChanged();
             return { success: true };
           } catch (err: any) {
             return { error: err?.message ?? String(err) };
@@ -47,6 +50,7 @@ export function createSettingsRpcHandler(workspace: WorkspaceManager) {
         removeProviderAuth: async ({ providerID }) => {
           try {
             await workspace.removeProviderAuth(providerID);
+            onSettingsChanged();
             return { success: true };
           } catch (err: any) {
             return { error: err?.message ?? String(err) };
@@ -65,6 +69,7 @@ export function createSettingsRpcHandler(workspace: WorkspaceManager) {
         addMcpServer: async ({ name, config }) => {
           try {
             await workspace.addMcpServer(name, config);
+            onSettingsChanged();
             return { success: true };
           } catch (err: any) {
             return { error: err?.message ?? String(err) };
@@ -74,6 +79,7 @@ export function createSettingsRpcHandler(workspace: WorkspaceManager) {
         removeMcpServer: async ({ name }) => {
           try {
             await workspace.removeMcpServer(name);
+            onSettingsChanged();
             return { success: true };
           } catch (err: any) {
             return { error: err?.message ?? String(err) };
@@ -83,6 +89,7 @@ export function createSettingsRpcHandler(workspace: WorkspaceManager) {
         reconnectMcpServer: async ({ name }) => {
           try {
             await workspace.reconnectMcpServer(name);
+            onSettingsChanged();
             return { success: true };
           } catch (err: any) {
             return { error: err?.message ?? String(err) };

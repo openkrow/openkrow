@@ -18,6 +18,7 @@ export default function App() {
   const [selectedModel, setSelectedModel] = useState<{ providerID: string; modelID: string } | null>({ providerID: "opencode", modelID: "big-pickle" });
   const [showHistory, setShowHistory] = useState(false);
   const [activeQuestion, setActiveQuestion] = useState<QuestionRequest | null>(null);
+  const [settingsRefreshKey, setSettingsRefreshKey] = useState(0);
 
   // Listen to streaming events
   useEffect(() => {
@@ -75,6 +76,10 @@ export default function App() {
 
     unsubs.push(onStreamEvent("questionAsked", (payload: QuestionRequest) => {
       setActiveQuestion(payload);
+    }));
+
+    unsubs.push(onStreamEvent("settingsChanged", () => {
+      setSettingsRefreshKey((k) => k + 1);
     }));
 
     return () => unsubs.forEach((fn) => fn());
@@ -218,7 +223,7 @@ export default function App() {
       )}
 
       {/* Input with model selector */}
-      <ChatInput onSend={handleSend} disabled={sending || !!activeQuestion} onModelChange={setSelectedModel} />
+      <ChatInput onSend={handleSend} disabled={sending || !!activeQuestion} onModelChange={setSelectedModel} refreshKey={settingsRefreshKey} />
 
     </div>
   );

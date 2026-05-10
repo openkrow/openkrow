@@ -28,7 +28,9 @@ function openSettingsWindow() {
     return;
   }
 
-  const settingsRpc = createSettingsRpcHandler(workspace);
+  const settingsRpc = createSettingsRpcHandler(workspace, () => {
+    rpc.send.settingsChanged({});
+  });
   settingsWindow = new BrowserWindow({
     title: "Settings",
     url: "views://settingsview/index.html",
@@ -116,8 +118,6 @@ const win = new BrowserWindow({
 // Cleanup on exit
 const cleanup = () => workspace.stop();
 
-// Cleanup when main window closes
-const mainWindowId = win.id;
 Electrobun.events.on("before-quit", cleanup);
 process.on("exit", cleanup);
 process.on("SIGINT", cleanup);

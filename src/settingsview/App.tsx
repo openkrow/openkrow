@@ -66,8 +66,17 @@ function ProvidersTab() {
   useEffect(() => { load(); }, []);
 
   const handleDisconnect = async (providerID: string) => {
+    // Optimistic update
+    setProviders((prev) => prev.map((p) => p.id === providerID ? { ...p, connected: false } : p));
+    setConnected((prev) => prev.filter((id) => id !== providerID));
     await rpc.request.removeProviderAuth({ providerID });
-    load();
+  };
+
+  const handleDone = async (providerID: string) => {
+    // Optimistic update
+    setEditingProvider(null);
+    setProviders((prev) => prev.map((p) => p.id === providerID ? { ...p, connected: true } : p));
+    setConnected((prev) => prev.includes(providerID) ? prev : [...prev, providerID]);
   };
 
   if (loading) {
@@ -128,7 +137,7 @@ function ProvidersTab() {
           {editingProvider === provider.id && (
             <ProviderAuthForm
               provider={provider}
-              onDone={() => { setEditingProvider(null); load(); }}
+              onDone={() => handleDone(provider.id)}
               onCancel={() => setEditingProvider(null)}
             />
           )}
@@ -180,13 +189,16 @@ function ProviderAuthForm({ provider, onDone, onCancel }: {
     return op === "eq" ? current === value : current !== value;
   };
 
+  const visiblePrompts = (method.prompts ?? []).filter(isPromptVisible);
+  const hasApiKeyPrompt = method.type === "api" && visiblePrompts.some((p) => p.type === "text");
+
   const handleApiSubmit = async () => {
     setSaving(true);
     setError(null);
     try {
       const prompts = method.prompts ?? [];
       const keyPrompt = prompts.find((p) => p.type === "text" && isPromptVisible(p));
-      const key = keyPrompt ? (inputs[keyPrompt.key] ?? "").trim() : "";
+      const key = keyPrompt ? (inputs[keyPrompt.key] ?? "").trim() : (inputs["__apiKey"] ?? "").trim();
       if (!key) { setSaving(false); return; }
 
       const metadata: Record<string, string> = {};
@@ -273,7 +285,7 @@ function ProviderAuthForm({ provider, onDone, onCancel }: {
         </div>
       )}
 
-      {(method.prompts ?? []).filter(isPromptVisible).map((prompt) => (
+      {visiblePrompts.map((prompt) => (
         <div key={prompt.key}>
           <label className="block text-[10px] text-neutral-400 mb-1">{prompt.message}</label>
           {prompt.type === "text" ? (
@@ -305,6 +317,25 @@ function ProviderAuthForm({ provider, onDone, onCancel }: {
           )}
         </div>
       ))}
+
+      {/* Fallback API key input when no text prompts are defined */}
+      {method.type === "api" && !hasApiKeyPrompt && (
+        <div>
+          <label className="block text-[10px] text-neutral-400 mb-1">API Key</label>
+          <input
+            type="password"
+            value={inputs["__apiKey"] ?? ""}
+            onChange={(e) => setInput("__apiKey", e.target.value)}
+            placeholder="Enter API key..."
+            autoFocus
+            className="w-full bg-neutral-900 border border-neutral-600 rounded-md px-3 py-1.5 text-xs text-neutral-200 placeholder:text-neutral-500 outline-none focus:border-neutral-500"
+            onKeyDown={(e) => {
+              if (e.key === "Enter") handleApiSubmit();
+              if (e.key === "Escape") onCancel();
+            }}
+          />
+        </div>
+      )}
 
       {method.type === "oauth" && oauthStep && (
         <div className="space-y-2">

@@ -284,6 +284,7 @@ export type KrowRPCSchema = {
       sessionStatus: { sessionId: string; status: "idle" | "busy" | "retry" };
       sessionError: { sessionId: string; error: string };
       questionAsked: QuestionRequest;
+      settingsChanged: {};
     };
   };
 };
