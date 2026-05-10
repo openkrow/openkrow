@@ -7,8 +7,8 @@
   "scripts": {
     "start": "bun run css && electrobun dev",
     "dev": "concurrently \"bun run css:watch\" \"electrobun dev --watch\"",
-    "css": "bunx @tailwindcss/cli -i src/mainview/index.css -o src/mainview/styles.css",
-    "css:watch": "bunx @tailwindcss/cli -i src/mainview/index.css -o src/mainview/styles.css --watch",
+    "css": "bunx @tailwindcss/cli -i mainview/index.css -o mainview/styles.css",
+    "css:watch": "bunx @tailwindcss/cli -i mainview/index.css -o mainview/styles.css --watch",
     "build": "bun run css && electrobun build",
     "build:prod": "bun run css && electrobun build --env stable",
     "typecheck": "tsc --noEmit"

@@ -6,9 +6,10 @@ type Props = {
   onSend: (text: string) => void;
   disabled: boolean;
   onModelChange: (model: { providerID: string; modelID: string } | null) => void;
+  refreshKey?: number;
 };
 
-export default function ChatInput({ onSend, disabled, onModelChange }: Props) {
+export default function ChatInput({ onSend, disabled, onModelChange, refreshKey }: Props) {
   const [input, setInput] = useState("");
   const [models, setModels] = useState<ModelInfo[]>([]);
   const [currentModel, setCurrentModel] = useState<string | null>("opencode/big-pickle");
@@ -24,7 +25,7 @@ export default function ChatInput({ onSend, disabled, onModelChange }: Props) {
         setModels(res.models);
       }
     });
-  }, []);
+  }, [refreshKey]);
 
   useEffect(() => {
     const handleClick = (e: MouseEvent) => {

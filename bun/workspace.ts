@@ -1,6 +1,6 @@
 import { createOpencode } from "@opencode-ai/sdk/v2";
 import type { OpencodeClient } from "@opencode-ai/sdk/v2";
-import type { ChatMessage, MessagePart } from "../shared/types";
+import type { ChatMessage, MessagePart, ProviderInfo, ProviderAuthData, McpServerInfo, McpLocalConfig, McpRemoteConfig } from "../shared/types";
 import { krowAgent } from "./agent";
 import { EventStream, type RpcSend } from "./stream";
 import { SkillInstaller } from "./skills";
@@ -201,6 +201,106 @@ export class WorkspaceManager {
     await this.client.question.reject({
       requestID: requestId,
     });
+  }
+
+  // ── Settings: Provider management ──
+
+  async listProviderConnections(): Promise<{ providers: ProviderInfo[]; connected: string[] }> {
+    if (!this.client) throw new Error("No workspace active");
+    const res = await this.client.provider.list();
+    if (!res.data) throw new Error("Failed to list providers");
+
+    // Fetch auth methods for all providers
+    const authRes = await this.client.provider.auth();
+    const authMap: Record<string, any[]> = (authRes.data as any) ?? {};
+
+    const connected = res.data.connected ?? [];
+    const providers: ProviderInfo[] = res.data.all.map((p: any) => ({
+      id: p.id,
+      name: p.name,
+      connected: connected.includes(p.id),
+      models: Object.entries(p.models || {}).map(([id, m]: [string, any]) => ({
+        id,
+        name: m.name,
+      })),
+      authMethods: authMap[p.id] ?? [],
+    }));
+
+    return { providers, connected };
+  }
+
+  async setProviderAuth(providerID: string, auth: ProviderAuthData): Promise<void> {
+    if (!this.client) throw new Error("No workspace active");
+    await this.client.auth.set({ providerID, auth: auth as any });
+  }
+
+  async startProviderOAuth(providerID: string, methodIndex: number, inputs?: Record<string, string>): Promise<{ url: string; method: string; instructions: string }> {
+    if (!this.client) throw new Error("No workspace active");
+    const res = await this.client.provider.oauth.authorize({
+      providerID,
+      method: methodIndex,
+      inputs,
+    });
+    if (!res.data) throw new Error("Failed to start OAuth");
+    return { url: (res.data as any).url, method: (res.data as any).method, instructions: (res.data as any).instructions };
+  }
+
+  async completeProviderOAuth(providerID: string, methodIndex: number, code: string): Promise<void> {
+    if (!this.client) throw new Error("No workspace active");
+    await this.client.provider.oauth.callback({
+      providerID,
+      method: methodIndex,
+      code,
+    });
+  }
+
+  async removeProviderAuth(providerID: string): Promise<void> {
+    if (!this.client) throw new Error("No workspace active");
+    await this.client.auth.remove({ providerID });
+  }
+
+  // ── Settings: MCP management ──
+
+  async listMcpServers(): Promise<McpServerInfo[]> {
+    if (!this.client) throw new Error("No workspace active");
+    const statusRes = await this.client.mcp.status();
+    if (!statusRes.data) return [];
+
+    // Get config to retrieve server configs
+    const configRes = await this.client.config.get();
+    const mcpConfig = configRes.data?.mcp ?? {};
+
+    const servers: McpServerInfo[] = [];
+    for (const [name, status] of Object.entries(statusRes.data as Record<string, any>)) {
+      const cfg = (mcpConfig as any)[name];
+      servers.push({
+        name,
+        status: status.status,
+        error: status.error,
+        config: cfg && typeof cfg === "object" && "type" in cfg ? cfg : undefined,
+      });
+    }
+    return servers;
+  }
+
+  async addMcpServer(name: string, config: McpLocalConfig | McpRemoteConfig): Promise<void> {
+    if (!this.client) throw new Error("No workspace active");
+    await this.client.mcp.add({ name, config: config as any });
+  }
+
+  async removeMcpServer(name: string): Promise<void> {
+    if (!this.client) throw new Error("No workspace active");
+    // Disconnect first, then disable via config
+    try { await this.client.mcp.disconnect({ name }); } catch {}
+    const configRes = await this.client.config.get();
+    const mcp = { ...(configRes.data?.mcp as any ?? {}) };
+    delete mcp[name];
+    await this.client.config.update({ config: { mcp } as any });
+  }
+
+  async reconnectMcpServer(name: string): Promise<void> {
+    if (!this.client) throw new Error("No workspace active");
+    await this.client.mcp.connect({ name });
   }
 
   /**
