@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
-import { rpc } from "../rpc";
-import type { ModelInfo } from "../../shared/types";
+import { rpc } from "../mainview/rpc";
+import type { ModelInfo } from "../shared/types";
 
 type Props = {
   onSend: (text: string) => void;

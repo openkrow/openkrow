@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
-import { rpc } from "../rpc";
-import type { ProviderInfo, McpServerInfo, ProviderAuthMethod, ProviderAuthPrompt } from "../../shared/types";
+import { rpc } from "../mainview/rpc";
+import type { ProviderInfo, McpServerInfo, ProviderAuthMethod, ProviderAuthPrompt } from "../shared/types";
 
 type Tab = "providers" | "mcp";
 

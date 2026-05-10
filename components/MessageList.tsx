@@ -1,7 +1,7 @@
 import { useRef, useEffect } from "react";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import type { ChatMessage, MessagePart, ToolPart, ReasoningPart } from "../../shared/types";
+import type { ChatMessage, MessagePart, ToolPart, ReasoningPart } from "../shared/types";
 
 type Props = {
   messages: ChatMessage[];

@@ -39,3 +39,6 @@ out/
 bun.lockb
 
 build/
+
+# OpenCode runtime data
+.opencode/

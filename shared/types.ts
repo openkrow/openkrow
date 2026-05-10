@@ -285,6 +285,7 @@ export type KrowRPCSchema = {
       sessionError: { sessionId: string; error: string };
       questionAsked: QuestionRequest;
       settingsChanged: {};
+      downloadProgress: { message: string };
     };
   };
 };

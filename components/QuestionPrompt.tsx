@@ -1,6 +1,6 @@
 import { useState } from "react";
-import { rpc } from "../rpc";
-import type { QuestionRequest } from "../../shared/types";
+import { rpc } from "../mainview/rpc";
+import type { QuestionRequest } from "../shared/types";
 
 type Props = {
   question: QuestionRequest;

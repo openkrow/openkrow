@@ -1,6 +1,7 @@
 import { BrowserView } from "electrobun/bun";
 import type { KrowRPCSchema } from "../shared/types";
 import { WorkspaceManager } from "./workspace";
+import { ensureOpencode } from "./opencode-installer";
 
 /**
  * Creates the RPC handler that bridges the webview and bun process.
@@ -16,6 +17,9 @@ export function createRpcHandler(workspace: WorkspaceManager, desktopPath: strin
           if (!initPromise) {
             initPromise = (async () => {
               try {
+                await ensureOpencode((message) => {
+                  rpc.send.downloadProgress({ message });
+                });
                 await workspace.start(desktopPath);
                 workspace.startEventStream(rpc.send);
                 return { path: desktopPath };

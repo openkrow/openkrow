@@ -1,10 +1,10 @@
 import { useState, useEffect } from "react";
 import { rpc, onStreamEvent } from "./rpc";
 import type { ChatMessage, MessagePart, SessionInfo, QuestionRequest } from "../shared/types";
-import MessageList from "./components/MessageList";
-import ChatInput from "./components/ChatInput";
-import SessionHistory from "./components/SessionHistory";
-import QuestionPrompt from "./components/QuestionPrompt";
+import MessageList from "../components/MessageList";
+import ChatInput from "../components/ChatInput";
+import SessionHistory from "../components/SessionHistory";
+import QuestionPrompt from "../components/QuestionPrompt";
 
 
 type AppState = "loading" | "ready" | "error";
@@ -19,6 +19,7 @@ export default function App() {
   const [showHistory, setShowHistory] = useState(false);
   const [activeQuestion, setActiveQuestion] = useState<QuestionRequest | null>(null);
   const [settingsRefreshKey, setSettingsRefreshKey] = useState(0);
+  const [loadingMessage, setLoadingMessage] = useState("Starting...");
 
   // Listen to streaming events
   useEffect(() => {
@@ -80,6 +81,10 @@ export default function App() {
 
     unsubs.push(onStreamEvent("settingsChanged", () => {
       setSettingsRefreshKey((k) => k + 1);
+    }));
+
+    unsubs.push(onStreamEvent("downloadProgress", (payload: { message: string }) => {
+      setLoadingMessage(payload.message);
     }));
 
     return () => unsubs.forEach((fn) => fn());
@@ -160,7 +165,7 @@ export default function App() {
     return (
       <div className="flex flex-col items-center justify-center h-screen bg-neutral-900 text-neutral-200 font-sans gap-6">
         <h1 className="text-4xl font-light tracking-tight">Krow</h1>
-        {state === "loading" && <p className="text-neutral-400 text-sm">Starting...</p>}
+        {state === "loading" && <p className="text-neutral-400 text-sm">{loadingMessage}</p>}
         {state === "error" && <p className="text-red-400 text-xs max-w-xs text-center">{error}</p>}
       </div>
     );
