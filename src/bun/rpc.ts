@@ -5,7 +5,7 @@ import { WorkspaceManager } from "./workspace";
 /**
  * Creates the RPC handler that bridges the webview and bun process.
  */
-export function createRpcHandler(workspace: WorkspaceManager, desktopPath: string) {
+export function createRpcHandler(workspace: WorkspaceManager, desktopPath: string, onOpenSettings: () => void) {
   let initPromise: Promise<{ path: string } | { error: string }> | null = null;
 
   const rpc = BrowserView.defineRPC<KrowRPCSchema>({
@@ -82,6 +82,11 @@ export function createRpcHandler(workspace: WorkspaceManager, desktopPath: strin
           }
         },
 
+        openSettings: async () => {
+          onOpenSettings();
+          return { success: true };
+        },
+
         replyQuestion: async ({ requestId, answers }) => {
           try {
             await workspace.replyQuestion(requestId, answers);
@@ -94,6 +99,87 @@ export function createRpcHandler(workspace: WorkspaceManager, desktopPath: strin
         rejectQuestion: async ({ requestId }) => {
           try {
             await workspace.rejectQuestion(requestId);
+            return { success: true };
+          } catch (err: any) {
+            return { error: err?.message ?? String(err) };
+          }
+        },
+
+        // Settings: Providers
+        listProviderConnections: async () => {
+          try {
+            return await workspace.listProviderConnections();
+          } catch (err: any) {
+            return { error: err?.message ?? String(err) };
+          }
+        },
+
+        setProviderAuth: async ({ providerID, auth }) => {
+          try {
+            await workspace.setProviderAuth(providerID, auth);
+            return { success: true };
+          } catch (err: any) {
+            return { error: err?.message ?? String(err) };
+          }
+        },
+
+        startProviderOAuth: async ({ providerID, methodIndex, inputs }) => {
+          try {
+            return await workspace.startProviderOAuth(providerID, methodIndex, inputs);
+          } catch (err: any) {
+            return { error: err?.message ?? String(err) };
+          }
+        },
+
+        completeProviderOAuth: async ({ providerID, methodIndex, code }) => {
+          try {
+            await workspace.completeProviderOAuth(providerID, methodIndex, code);
+            return { success: true };
+          } catch (err: any) {
+            return { error: err?.message ?? String(err) };
+          }
+        },
+
+        removeProviderAuth: async ({ providerID }) => {
+          try {
+            await workspace.removeProviderAuth(providerID);
+            return { success: true };
+          } catch (err: any) {
+            return { error: err?.message ?? String(err) };
+          }
+        },
+
+        // Settings: MCP
+        listMcpServers: async () => {
+          try {
+            const servers = await workspace.listMcpServers();
+            return { servers };
+          } catch (err: any) {
+            return { error: err?.message ?? String(err) };
+          }
+        },
+
+        addMcpServer: async ({ name, config }) => {
+          try {
+            await workspace.addMcpServer(name, config);
+            return { success: true };
+          } catch (err: any) {
+            return { error: err?.message ?? String(err) };
+          }
+        },
+
+        removeMcpServer: async ({ name }) => {
+          try {
+            await workspace.removeMcpServer(name);
+            return { success: true };
+          } catch (err: any) {
+            return { error: err?.message ?? String(err) };
+          }
+        },
+
+        reconnectMcpServer: async ({ name }) => {
+          try {
+            await workspace.reconnectMcpServer(name);
             return { success: true };
           } catch (err: any) {
             return { error: err?.message ?? String(err) };

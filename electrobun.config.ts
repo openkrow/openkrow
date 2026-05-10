@@ -17,10 +17,14 @@ export default {
       mainview: {
         entrypoint: "src/mainview/index.tsx",
       },
+      settingsview: {
+        entrypoint: "src/settingsview/index.tsx",
+      },
     },
     copy: {
       "src/mainview/index.html": "views/mainview/index.html",
       "src/mainview/styles.css": "views/mainview/styles.css",
+      "src/settingsview/index.html": "views/settingsview/index.html",
     },
   },
 } satisfies ElectrobunConfig;

@@ -92,6 +92,104 @@ export type QuestionRequest = {
   questions: QuestionInfo[];
 };
 
+// Settings types
+export type ProviderInfo = {
+  id: string;
+  name: string;
+  connected: boolean;
+  models: { id: string; name: string }[];
+  authMethods: ProviderAuthMethod[];
+};
+
+export type ProviderAuthPrompt = {
+  type: "text" | "select";
+  key: string;
+  message: string;
+  placeholder?: string;
+  options?: { label: string; value: string; hint?: string }[];
+  when?: { key: string; op: "eq" | "neq"; value: string };
+};
+
+export type ProviderAuthMethod = {
+  type: "oauth" | "api";
+  label: string;
+  prompts?: ProviderAuthPrompt[];
+};
+
+export type ProviderAuthData =
+  | { type: "api"; key: string; metadata?: Record<string, string> }
+  | { type: "oauth"; refresh: string; access: string; expires: number }
+  | { type: "wellknown"; key: string; token: string };
+
+export type McpServerInfo = {
+  name: string;
+  status: "connected" | "disabled" | "failed" | "needs_auth" | "needs_client_registration";
+  error?: string;
+  config?: McpLocalConfig | McpRemoteConfig;
+};
+
+export type McpLocalConfig = {
+  type: "local";
+  command: string[];
+  environment?: Record<string, string>;
+  enabled?: boolean;
+};
+
+export type McpRemoteConfig = {
+  type: "remote";
+  url: string;
+  enabled?: boolean;
+  headers?: Record<string, string>;
+};
+
+export type SettingsRPCSchema = {
+  bun: {
+    requests: {
+      listProviderConnections: {
+        params: {};
+        response: { providers: ProviderInfo[]; connected: string[] } | { error: string };
+      };
+      setProviderAuth: {
+        params: { providerID: string; auth: ProviderAuthData };
+        response: { success: boolean } | { error: string };
+      };
+      startProviderOAuth: {
+        params: { providerID: string; methodIndex: number; inputs?: Record<string, string> };
+        response: { url: string; method: string; instructions: string } | { error: string };
+      };
+      completeProviderOAuth: {
+        params: { providerID: string; methodIndex: number; code: string };
+        response: { success: boolean } | { error: string };
+      };
+      removeProviderAuth: {
+        params: { providerID: string };
+        response: { success: boolean } | { error: string };
+      };
+      listMcpServers: {
+        params: {};
+        response: { servers: McpServerInfo[] } | { error: string };
+      };
+      addMcpServer: {
+        params: { name: string; config: McpLocalConfig | McpRemoteConfig };
+        response: { success: boolean } | { error: string };
+      };
+      removeMcpServer: {
+        params: { name: string };
+        response: { success: boolean } | { error: string };
+      };
+      reconnectMcpServer: {
+        params: { name: string };
+        response: { success: boolean } | { error: string };
+      };
+    };
+    messages: {};
+  };
+  webview: {
+    requests: {};
+    messages: {};
+  };
+};
+
 export type KrowRPCSchema = {
   bun: {
     requests: {
@@ -123,12 +221,54 @@ export type KrowRPCSchema = {
         params: {};
         response: { models: ModelInfo[]; currentModel: string | null } | { error: string };
       };
+      openSettings: {
+        params: {};
+        response: { success: boolean };
+      };
       replyQuestion: {
         params: { requestId: string; answers: string[][] };
         response: { success: boolean } | { error: string };
       };
       rejectQuestion: {
         params: { requestId: string };
+        response: { success: boolean } | { error: string };
+      };
+      // Settings: Providers
+      listProviderConnections: {
+        params: {};
+        response: { providers: ProviderInfo[]; connected: string[] } | { error: string };
+      };
+      setProviderAuth: {
+        params: { providerID: string; auth: ProviderAuthData };
+        response: { success: boolean } | { error: string };
+      };
+      startProviderOAuth: {
+        params: { providerID: string; methodIndex: number; inputs?: Record<string, string> };
+        response: { url: string; method: string; instructions: string } | { error: string };
+      };
+      completeProviderOAuth: {
+        params: { providerID: string; methodIndex: number; code: string };
+        response: { success: boolean } | { error: string };
+      };
+      removeProviderAuth: {
+        params: { providerID: string };
+        response: { success: boolean } | { error: string };
+      };
+      // Settings: MCP
+      listMcpServers: {
+        params: {};
+        response: { servers: McpServerInfo[] } | { error: string };
+      };
+      addMcpServer: {
+        params: { name: string; config: McpLocalConfig | McpRemoteConfig };
+        response: { success: boolean } | { error: string };
+      };
+      removeMcpServer: {
+        params: { name: string };
+        response: { success: boolean } | { error: string };
+      };
+      reconnectMcpServer: {
+        params: { name: string };
         response: { success: boolean } | { error: string };
       };
     };

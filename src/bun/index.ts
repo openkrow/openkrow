@@ -1,24 +1,70 @@
 import { BrowserWindow, ApplicationMenu } from "electrobun/bun";
 import Electrobun from "electrobun/bun";
 import { homedir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { WorkspaceManager } from "./workspace";
 import { createRpcHandler } from "./rpc";
+import { createSettingsRpcHandler } from "./settings-rpc";
 
 // Ensure opencode CLI is on PATH
 const home = homedir();
 process.env.PATH = `${join(home, ".opencode/bin")}:/usr/local/bin:/usr/bin:/bin:${process.env.PATH ?? ""}`;
 process.env.HOME = home;
 
+// Capture views folder path before process.chdir() happens in workspace.start()
+const viewsRoot = resolve("../Resources/app/views");
+
 // Core services
 const workspace = new WorkspaceManager();
 const desktopPath = join(home, "Desktop");
-const rpc = createRpcHandler(workspace, desktopPath);
+const rpc = createRpcHandler(workspace, desktopPath, openSettingsWindow);
+
+// Settings window management
+let settingsWindow: BrowserWindow | null = null;
+
+function openSettingsWindow() {
+  if (settingsWindow) {
+    settingsWindow.activate();
+    return;
+  }
+
+  const settingsRpc = createSettingsRpcHandler(workspace);
+  settingsWindow = new BrowserWindow({
+    title: "Settings",
+    url: "views://settingsview/index.html",
+    rpc: settingsRpc,
+    titleBarStyle: "hiddenInset",
+    viewsRoot,
+    frame: {
+      width: 560,
+      height: 600,
+      x: 200,
+      y: 100,
+    },
+  });
+
+  const settingsId = settingsWindow.id;
+  Electrobun.events.on("close", (event: any) => {
+    if (event?.data?.id === settingsId) {
+      settingsWindow = null;
+    }
+  });
+}
 
 // Application menu
 ApplicationMenu.setApplicationMenu([
   {
-    submenu: [{ label: "Quit", role: "quit" }],
+    submenu: [
+      { label: "About Krow", role: "about" },
+      { type: "separator" },
+      { label: "Settings...", action: "open-settings", accelerator: "cmd+," },
+      { type: "separator" },
+      { label: "Hide Krow", role: "hide" },
+      { label: "Hide Others", role: "hideOthers" },
+      { label: "Show All", role: "showAll" },
+      { type: "separator" },
+      { label: "Quit Krow", role: "quit" },
+    ],
   },
   {
     label: "Edit",
@@ -32,7 +78,27 @@ ApplicationMenu.setApplicationMenu([
       { role: "selectAll" },
     ],
   },
+  {
+    label: "View",
+    submenu: [
+      { label: "Toggle Full Screen", role: "toggleFullScreen" },
+    ],
+  },
+  {
+    label: "Window",
+    submenu: [
+      { role: "minimize" },
+      { role: "zoom" },
+      { role: "close" },
+    ],
+  },
 ]);
+
+ApplicationMenu.on("application-menu-clicked", (event: any) => {
+  if (event?.action === "open-settings") {
+    openSettingsWindow();
+  }
+});
 
 // Main window
 const win = new BrowserWindow({
@@ -50,8 +116,9 @@ const win = new BrowserWindow({
 // Cleanup on exit
 const cleanup = () => workspace.stop();
 
+// Cleanup when main window closes
+const mainWindowId = win.id;
 Electrobun.events.on("before-quit", cleanup);
-Electrobun.events.on("close", cleanup);
 process.on("exit", cleanup);
 process.on("SIGINT", cleanup);
 process.on("SIGTERM", cleanup);
