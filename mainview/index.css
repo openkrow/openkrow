@@ -1,1 +1,294 @@
 @import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* ─── Obsidian Intelligence Design System ─── */
+
+@theme inline {
+  /* Ember accent (shared) */
+  --color-ember: #E5A411;
+  --color-ember-light: #F0BE4A;
+  --color-ember-glow: #E5A41133;
+  --color-ember-subtle: #E5A41118;
+
+  /* Theme-aware surfaces (resolved via CSS variables) */
+  --color-surface: var(--surface-base);
+  --color-surface-100: var(--surface-100);
+  --color-surface-200: var(--surface-200);
+  --color-surface-300: var(--surface-300);
+  --color-surface-400: var(--surface-400);
+  --color-surface-500: var(--surface-500);
+
+  /* Theme-aware text */
+  --color-text-primary: var(--text-primary);
+  --color-text-muted: var(--text-muted);
+  --color-text-faint: var(--text-faint);
+
+  /* Theme-aware ghost */
+  --color-ghost: var(--ghost-bg);
+  --color-ghost-hover: var(--ghost-hover);
+  --color-ghost-border: var(--ghost-border);
+
+  /* Obsidian (dark-only, kept for explicit dark references) */
+  --color-obsidian: #08080C;
+  --color-obsidian-100: #0E0E14;
+  --color-obsidian-200: #15151F;
+  --color-obsidian-300: #1C1C2A;
+  --color-obsidian-400: #2A2A3D;
+  --color-obsidian-500: #3D3D55;
+
+  /* Fonts */
+  --font-display: "Syne", sans-serif;
+  --font-body: "Geist Sans", "Geist", -apple-system, sans-serif;
+  --font-mono: "JetBrains Mono", monospace;
+}
+
+/* ─── Theme Variables ─── */
+
+:root {
+  /* Light theme (default) */
+  --surface-base: #F5F0E8;
+  --surface-100: #EDE7DB;
+  --surface-200: #E0D8C8;
+  --surface-300: #D4C9B4;
+  --surface-400: #C4B89E;
+  --surface-500: #8A8274;
+
+  --text-primary: #1A1712;
+  --text-muted: #5C5549;
+  --text-faint: #8A8274;
+
+  --ghost-bg: #ffffff60;
+  --ghost-hover: #ffffff80;
+  --ghost-border: #1A17120C;
+
+  --accent: #E5A411;
+  --accent-text: #C48D0E;
+
+  --noise-opacity: 0.022;
+  --code-bg: #E0D8C8;
+  --scrollbar-thumb: #D4C9B4;
+  --scrollbar-hover: #C4B89E;
+}
+
+.dark {
+  --surface-base: #08080C;
+  --surface-100: #0E0E14;
+  --surface-200: #15151F;
+  --surface-300: #1C1C2A;
+  --surface-400: #2A2A3D;
+  --surface-500: #3D3D55;
+
+  --text-primary: #C8C2B6;
+  --text-muted: #6B6578;
+  --text-faint: #3D3D55;
+
+  --ghost-bg: #ffffff08;
+  --ghost-hover: #ffffff0D;
+  --ghost-border: #ffffff10;
+
+  --accent: #F0BE4A;
+  --accent-text: #F0BE4A;
+
+  --noise-opacity: 0.035;
+  --code-bg: #0E0E14;
+  --scrollbar-thumb: #2A2A3D;
+  --scrollbar-hover: #3D3D55;
+}
+
+/* ─── Base ─── */
+
+body {
+  font-family: var(--font-body);
+  background: var(--surface-base);
+  color: var(--text-primary);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Noise texture overlay */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  pointer-events: none;
+  opacity: var(--noise-opacity);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='1'/%3E%3C/svg%3E");
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--scrollbar-thumb);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--scrollbar-hover);
+}
+
+/* ─── Utilities ─── */
+
+.font-display {
+  font-family: var(--font-display);
+}
+
+.font-mono {
+  font-family: var(--font-mono);
+}
+
+.glass-card {
+  background: var(--ghost-bg);
+  border: 1px solid var(--ghost-border);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-radius: 16px;
+  transition: border-color 0.3s ease, transform 0.2s ease;
+}
+
+.glass-card:hover {
+  border-color: var(--ghost-hover);
+}
+
+.ember-text {
+  color: var(--accent-text);
+}
+
+.ember-glow {
+  text-shadow: 0 0 20px var(--color-ember-glow), 0 0 40px var(--color-ember-glow);
+}
+
+/* Theme-aware surface utilities */
+.bg-surface { background: var(--surface-base); }
+.bg-surface-100 { background: var(--surface-100); }
+.bg-surface-200 { background: var(--surface-200); }
+.bg-surface-300 { background: var(--surface-300); }
+.border-surface { border-color: var(--ghost-border); }
+.text-primary { color: var(--text-primary); }
+.text-muted { color: var(--text-muted); }
+.text-faint { color: var(--text-faint); }
+.text-accent { color: var(--accent-text); }
+
+/* ─── Animations ─── */
+
+@keyframes reveal-up {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.98);
+    filter: blur(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    filter: blur(0);
+  }
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-4px); }
+}
+
+@keyframes pulse-ember {
+  0%, 100% { opacity: 0.4; }
+  50% { opacity: 0.8; }
+}
+
+@keyframes braille-dissolve {
+  0.00% { content: "□········"; }
+  2.86% { content: "□········"; }
+  5.71% { content: "□········"; }
+  8.57% { content: "■□·······"; }
+  11.43% { content: "■□·······"; }
+  14.29% { content: "■□·······"; }
+  17.14% { content: "■■□······"; }
+  20.00% { content: "■■□······"; }
+  22.86% { content: "■■□······"; }
+  25.71% { content: "■■■□·····"; }
+  28.57% { content: "■■■□·····"; }
+  31.43% { content: "■■■□·····"; }
+  34.29% { content: "■■■■□····"; }
+  37.14% { content: "■■■■□····"; }
+  40.00% { content: "■■■■□····"; }
+  42.86% { content: "■■■■■□···"; }
+  45.71% { content: "■■■■■□···"; }
+  48.57% { content: "■■■■■□···"; }
+  51.43% { content: "■■■■■■□··"; }
+  54.29% { content: "■■■■■■□··"; }
+  57.14% { content: "■■■■■■□··"; }
+  60.00% { content: "■■■■■■■□·"; }
+  62.86% { content: "■■■■■■■□·"; }
+  65.71% { content: "■■■■■■■□·"; }
+  68.57% { content: "■■■■■■■■□"; }
+  71.43% { content: "■■■■■■■■□"; }
+  74.29% { content: "■■■■■■■■□"; }
+  77.14% { content: "■■■■■■■■■"; }
+  80.00% { content: "■■■■■■■■■"; }
+  82.86% { content: "■■■■■■■■■"; }
+  85.71% { content: "■■■■■■■■■"; }
+  88.57% { content: "■■■■■■■■■"; }
+  91.43% { content: "■■■■■■■■■"; }
+  94.29% { content: "■■■■■■■■■"; }
+  97.14% { content: "■■■■■■■■■"; }
+  100% { content: "□········"; }
+}
+
+.animate-braille::after {
+  content: "□········";
+  animation: braille-dissolve 2.5s steps(1) infinite;
+}
+
+@keyframes shimmer {
+  0% { background-position: -200% center; }
+  100% { background-position: 200% center; }
+}
+
+@keyframes typing-cursor {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
+.animate-reveal {
+  animation: reveal-up 0.9s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.animate-fade {
+  animation: fade-in 1.2s ease both;
+}
+
+.animate-float {
+  animation: float 6s ease-in-out infinite;
+}
+
+.animate-shimmer {
+  background: linear-gradient(90deg, transparent, var(--color-ember-subtle), transparent);
+  background-size: 200% 100%;
+  animation: shimmer 3s ease-in-out infinite;
+}
+
+.animate-cursor {
+  animation: typing-cursor 1s ease-in-out infinite;
+}
+
+/* Stagger delays */
+.delay-1 { animation-delay: 0.1s; }
+.delay-2 { animation-delay: 0.2s; }
+.delay-3 { animation-delay: 0.3s; }
+.delay-4 { animation-delay: 0.4s; }
+.delay-5 { animation-delay: 0.5s; }
+
+/* ─── Selection ─── */
+::selection {
+  background: var(--color-ember-subtle);
+  color: var(--accent-text);
+}

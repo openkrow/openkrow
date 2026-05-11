@@ -5,6 +5,7 @@ import MessageList from "../components/MessageList";
 import ChatInput from "../components/ChatInput";
 import SessionHistory from "../components/SessionHistory";
 import QuestionPrompt from "../components/QuestionPrompt";
+import ThemeToggle from "../components/ThemeToggle";
 
 
 type AppState = "loading" | "ready" | "error";
@@ -19,7 +20,7 @@ export default function App() {
   const [showHistory, setShowHistory] = useState(false);
   const [activeQuestion, setActiveQuestion] = useState<QuestionRequest | null>(null);
   const [settingsRefreshKey, setSettingsRefreshKey] = useState(0);
-  const [loadingMessage, setLoadingMessage] = useState("Starting...");
+  const [loadingMessage, setLoadingMessage] = useState("Initializing...");
 
   // Listen to streaming events
   useEffect(() => {
@@ -161,38 +162,76 @@ export default function App() {
     }
   };
 
+  // ─── Loading / Error Screen ───
   if (state !== "ready") {
     return (
-      <div className="flex flex-col items-center justify-center h-screen bg-neutral-900 text-neutral-200 font-sans gap-6">
-        <h1 className="text-4xl font-light tracking-tight">Krow</h1>
-        {state === "loading" && <p className="text-neutral-400 text-sm">{loadingMessage}</p>}
-        {state === "error" && <p className="text-red-400 text-xs max-w-xs text-center">{error}</p>}
+      <div className="flex flex-col items-center justify-center h-screen bg-surface">
+        {/* Atmospheric glow */}
+        <div className="absolute inset-0 overflow-hidden pointer-events-none">
+          <div className="absolute top-1/3 left-1/2 -translate-x-1/2 w-[300px] h-[300px] rounded-full bg-ember/[0.04] blur-[120px]" />
+        </div>
+
+        <div className="relative z-10 flex flex-col items-center gap-6 animate-reveal">
+          {/* Logo mark */}
+          <div className="relative">
+            <div className="w-14 h-14 rounded-2xl glass-card flex items-center justify-center">
+              <span className="font-display text-2xl font-bold text-primary tracking-tight">K</span>
+              <div className="absolute -top-0.5 -right-0.5 w-3 h-3 rounded-full bg-ember shadow-[0_0_12px_var(--color-ember-glow)]" />
+            </div>
+          </div>
+
+          <h1 className="font-display text-xl font-semibold text-primary tracking-tight">Krow</h1>
+
+          {state === "loading" && (
+            <div className="flex flex-col items-center gap-3 animate-fade delay-2">
+              <span className="font-mono text-[13px] text-accent tracking-wider animate-braille" />
+              <p className="font-mono text-[11px] text-muted tracking-wide">{loadingMessage}</p>
+            </div>
+          )}
+
+          {state === "error" && (
+            <div className="flex flex-col items-center gap-2 animate-fade">
+              <p className="text-red-400/80 text-xs max-w-xs text-center font-mono">{error}</p>
+            </div>
+          )}
+        </div>
       </div>
     );
   }
 
+  // ─── Main Chat UI ───
   return (
-    <div className="flex flex-col h-screen bg-neutral-900 text-neutral-200 font-sans">
+    <div className="flex flex-col h-screen bg-surface relative">
+      {/* Subtle top atmospheric glow */}
+      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[400px] h-[200px] bg-ember/[0.02] blur-[100px] pointer-events-none" />
+
       {/* Header */}
-      <div className="flex items-center justify-between px-4 py-2.5 border-b border-neutral-800 shrink-0" style={{ paddingTop: "1.75rem" }}>
-        <div className="flex items-center gap-2">
-          <h1 className="text-sm font-medium">Krow</h1>
+      <div
+        className="flex items-center justify-between px-4 py-2.5 border-b border-surface shrink-0 backdrop-blur-sm relative z-10"
+        style={{ paddingTop: "1.75rem", WebkitAppRegion: "drag" } as any}
+      >
+        <div className="flex items-center gap-2.5" style={{ WebkitAppRegion: "no-drag" } as any}>
+          <div className="relative w-7 h-7 rounded-lg glass-card flex items-center justify-center !rounded-lg">
+            <span className="font-display text-xs font-bold text-primary">K</span>
+            <div className="absolute -top-px -right-px w-1.5 h-1.5 rounded-full bg-ember" />
+          </div>
+          <h1 className="font-display text-sm font-semibold text-primary tracking-tight">Krow</h1>
         </div>
-        <div className="flex items-center gap-1">
-          {/* History button */}
+
+        <div className="flex items-center gap-0.5" style={{ WebkitAppRegion: "no-drag" } as any}>
+          <ThemeToggle />
           <button
             onClick={() => setShowHistory(!showHistory)}
-            className="p-1.5 rounded-md hover:bg-neutral-800 transition-colors text-neutral-400 hover:text-neutral-200"
+            className="p-1.5 rounded-lg hover:bg-[var(--ghost-hover)] transition-colors text-[var(--text-muted)] hover:text-[var(--text-primary)]"
             title="Chat history"
           >
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
           </button>
-          {/* Settings button */}
           <button
             onClick={() => rpc.request.openSettings({})}
-            className="p-1.5 rounded-md hover:bg-neutral-800 transition-colors text-neutral-400 hover:text-neutral-200"
+            className="p-1.5 rounded-lg hover:bg-[var(--ghost-hover)] transition-colors text-[var(--text-muted)] hover:text-[var(--text-primary)]"
             title="Settings"
           >
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
@@ -200,11 +239,9 @@ export default function App() {
               <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
             </svg>
           </button>
-
-          {/* New session button */}
           <button
             onClick={handleNewSession}
-            className="p-1.5 rounded-md hover:bg-neutral-800 transition-colors text-neutral-400 hover:text-neutral-200"
+            className="p-1.5 rounded-lg hover:bg-[var(--ghost-hover)] transition-colors text-[var(--text-muted)] hover:text-[var(--text-primary)]"
             title="New chat"
           >
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
@@ -227,9 +264,8 @@ export default function App() {
         <QuestionPrompt question={activeQuestion} onDismiss={() => setActiveQuestion(null)} />
       )}
 
-      {/* Input with model selector */}
+      {/* Input */}
       <ChatInput onSend={handleSend} disabled={sending || !!activeQuestion} onModelChange={setSelectedModel} refreshKey={settingsRefreshKey} />
-
     </div>
   );
 }

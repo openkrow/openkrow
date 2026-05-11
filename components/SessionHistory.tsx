@@ -44,28 +44,27 @@ export default function SessionHistory({ onSelect, onClose, currentSessionId }: 
   return (
     <div
       ref={ref}
-      className="absolute top-12 right-3 w-72 max-h-96 overflow-y-auto bg-neutral-850 border border-neutral-700 rounded-lg shadow-2xl z-50"
-      style={{ backgroundColor: "#1a1a1a" }}
+      className="absolute top-14 right-3 w-72 max-h-96 overflow-y-auto glass-card shadow-2xl z-50 animate-reveal"
     >
-      <div className="px-3 py-2 border-b border-neutral-700">
-        <span className="text-xs font-medium text-neutral-400">Chat History</span>
+      <div className="px-4 py-3 border-b border-ghost-border">
+        <span className="font-mono text-[11px] uppercase tracking-[0.2em] text-text-muted">History</span>
       </div>
       {loading ? (
-        <div className="px-3 py-4 text-xs text-neutral-500 text-center">Loading...</div>
+        <div className="px-4 py-6 text-[11px] text-text-muted text-center font-mono">Loading...</div>
       ) : sessions.length === 0 ? (
-        <div className="px-3 py-4 text-xs text-neutral-500 text-center">No sessions yet</div>
+        <div className="px-4 py-6 text-[11px] text-text-faint text-center font-mono">No sessions yet</div>
       ) : (
         <div className="py-1">
           {sessions.map((session) => (
             <button
               key={session.id}
               onClick={() => onSelect(session)}
-              className={`w-full text-left px-3 py-2 text-xs hover:bg-neutral-800 transition-colors flex items-center justify-between gap-2 ${
-                session.id === currentSessionId ? "bg-neutral-800 text-white" : "text-neutral-300"
+              className={`w-full text-left px-4 py-2.5 text-xs hover:bg-ghost-hover transition-colors flex items-center justify-between gap-3 ${
+                session.id === currentSessionId ? "bg-ember-subtle text-ember-light" : "text-text-primary"
               }`}
             >
               <span className="truncate">{session.title}</span>
-              <span className="text-[10px] text-neutral-500 shrink-0">{formatTime(session.updatedAt)}</span>
+              <span className="font-mono text-[10px] text-text-faint shrink-0">{formatTime(session.updatedAt)}</span>
             </button>
           ))}
         </div>
