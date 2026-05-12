@@ -5,6 +5,7 @@ import { join, resolve } from "node:path";
 import { WorkspaceManager } from "./workspace";
 import { createRpcHandler } from "./rpc";
 import { createSettingsRpcHandler } from "./settings-rpc";
+import type { Theme } from "../shared/types";
 
 // Ensure opencode CLI is on PATH
 const home = homedir();
@@ -17,7 +18,19 @@ const viewsRoot = resolve("../Resources/app/views");
 // Core services
 const workspace = new WorkspaceManager();
 const desktopPath = join(home, "Desktop");
-const rpc = createRpcHandler(workspace, desktopPath, openSettingsWindow);
+let appTheme: Theme = "dark";
+let settingsRpc: any | null = null;
+
+function setAppTheme(theme: Theme) {
+  appTheme = theme;
+  rpc.send.themeChanged({ theme });
+  settingsRpc?.send.themeChanged({ theme });
+}
+
+const rpc = createRpcHandler(workspace, desktopPath, openSettingsWindow, {
+  getTheme: () => appTheme,
+  setTheme: setAppTheme,
+});
 
 // Settings window management
 let settingsWindow: BrowserWindow | null = null;
@@ -28,9 +41,16 @@ function openSettingsWindow() {
     return;
   }
 
-  const settingsRpc = createSettingsRpcHandler(workspace, () => {
-    rpc.send.settingsChanged({});
-  });
+  settingsRpc = createSettingsRpcHandler(
+    workspace,
+    () => {
+      rpc.send.settingsChanged({});
+    },
+    {
+      getTheme: () => appTheme,
+      setTheme: setAppTheme,
+    },
+  );
   settingsWindow = new BrowserWindow({
     title: "Settings",
     url: "views://settingsview/index.html",
@@ -49,6 +69,7 @@ function openSettingsWindow() {
   Electrobun.events.on("close", (event: any) => {
     if (event?.data?.id === settingsId) {
       settingsWindow = null;
+      settingsRpc = null;
     }
   });
 }
@@ -65,7 +86,7 @@ ApplicationMenu.setApplicationMenu([
       { label: "Hide Others", role: "hideOthers" },
       { label: "Show All", role: "showAll" },
       { type: "separator" },
-      { label: "Quit Krow", role: "quit" },
+      { label: "Quit Krow", role: "quit", accelerator: "cmd+q" },
     ],
   },
   {

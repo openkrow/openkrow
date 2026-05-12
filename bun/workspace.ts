@@ -1,6 +1,6 @@
 import { createOpencode } from "@opencode-ai/sdk/v2";
 import type { OpencodeClient } from "@opencode-ai/sdk/v2";
-import type { ChatMessage, MessagePart, ProviderInfo, ProviderAuthData, McpServerInfo, McpLocalConfig, McpRemoteConfig } from "../shared/types";
+import type { ChatMessage, MessagePart, ProviderInfo, ProviderAuthData, ProviderAuthMethod, McpServerInfo, McpLocalConfig, McpRemoteConfig } from "../shared/types";
 import { krowAgent } from "./agent";
 import { EventStream, type RpcSend } from "./stream";
 import { SkillInstaller } from "./skills";
@@ -215,18 +215,25 @@ export class WorkspaceManager {
     const authMap: Record<string, any[]> = (authRes.data as any) ?? {};
 
     const connected = res.data.connected ?? [];
-    const providers: ProviderInfo[] = res.data.all.map((p: any) => ({
-      id: p.id,
-      name: p.name,
-      connected: connected.includes(p.id),
-      models: Object.entries(p.models || {}).map(([id, m]: [string, any]) => ({
-        id,
-        name: m.name,
-      })),
-      authMethods: authMap[p.id] ?? [],
-    }));
+    const providers: ProviderInfo[] = res.data.all.map((p: any) => {
+      const authMethods = authMap[p.id] ?? [];
+      return {
+        id: p.id,
+        name: p.name,
+        connected: connected.includes(p.id),
+        models: Object.entries(p.models || {}).map(([id, m]: [string, any]) => ({
+          id,
+          name: m.name,
+        })),
+        authMethods: authMethods.length > 0 ? authMethods : WorkspaceManager.defaultApiAuthMethods(),
+      };
+    });
 
     return { providers, connected };
+  }
+
+  private static defaultApiAuthMethods(): ProviderAuthMethod[] {
+    return [{ type: "api", label: "API Key" }];
   }
 
   async setProviderAuth(providerID: string, auth: ProviderAuthData): Promise<void> {

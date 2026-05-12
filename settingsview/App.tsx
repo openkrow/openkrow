@@ -2,43 +2,19 @@ import { useState, useEffect } from "react";
 import { rpc } from "./rpc";
 import type { ProviderInfo, McpServerInfo, ProviderAuthPrompt } from "../shared/types";
 
-type Tab = "providers" | "mcp";
-
 export default function App() {
-  const [tab, setTab] = useState<Tab>("providers");
-
   return (
     <div className="flex flex-col h-screen bg-surface text-text-primary">
       {/* Draggable title bar area */}
       <div className="shrink-0" style={{ height: "1.75rem", WebkitAppRegion: "drag" } as any} />
 
-      {/* Tabs */}
-      <div className="flex border-b border-ghost-border px-5 shrink-0">
-        <button
-          onClick={() => setTab("providers")}
-          className={`px-3 py-2.5 font-mono text-[11px] uppercase tracking-[0.15em] border-b-2 transition-colors ${
-            tab === "providers"
-              ? "border-ember text-ember-light"
-              : "border-transparent text-text-muted hover:text-text-primary"
-          }`}
-        >
-          Providers
-        </button>
-        <button
-          onClick={() => setTab("mcp")}
-          className={`px-3 py-2.5 font-mono text-[11px] uppercase tracking-[0.15em] border-b-2 transition-colors ${
-            tab === "mcp"
-              ? "border-ember text-ember-light"
-              : "border-transparent text-text-muted hover:text-text-primary"
-          }`}
-        >
-          MCP Servers
-        </button>
+      <div className="border-b border-ghost-border px-5 py-3 shrink-0">
+        <h1 className="font-display text-sm font-semibold text-text-primary">Settings</h1>
       </div>
 
       {/* Content */}
       <div className="flex-1 overflow-y-auto p-5">
-        {tab === "providers" ? <ProvidersTab /> : <McpTab />}
+        <ProvidersTab />
       </div>
     </div>
   );

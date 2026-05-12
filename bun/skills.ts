@@ -1,6 +1,6 @@
 import { join } from "node:path";
-import { mkdir, stat, rm, writeFile } from "node:fs/promises";
-import { execSync } from "node:child_process";
+import { mkdir, stat, rm, writeFile, cp } from "node:fs/promises";
+import { execFileSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { randomUUID } from "node:crypto";
 
@@ -41,11 +41,9 @@ export class SkillInstaller {
       const buffer = Buffer.from(await res.arrayBuffer());
       await writeFile(tarPath, buffer as any);
 
-      const extractPatterns = toInstall
-        .map((name) => `"skills-main/skills/${name}"`)
-        .join(" ");
+      const extractPatterns = toInstall.map((name) => `skills-main/skills/${name}`);
 
-      execSync(`tar -xzf "${tarPath}" -C "${tmpDir}" ${extractPatterns}`, {
+      execFileSync("tar", ["-xzf", tarPath, "-C", tmpDir, ...extractPatterns], {
         stdio: "pipe",
         timeout: 30000,
       });
@@ -54,7 +52,7 @@ export class SkillInstaller {
         const src = join(tmpDir, "skills-main", "skills", name);
         const dest = join(skillsDir, name);
         if (await SkillInstaller.exists(src)) {
-          execSync(`cp -r "${src}" "${dest}"`, { stdio: "pipe" });
+          await cp(src, dest, { recursive: true, force: false, errorOnExist: true });
         }
       }
     } finally {

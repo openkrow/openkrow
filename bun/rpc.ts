@@ -1,18 +1,32 @@
 import { BrowserView } from "electrobun/bun";
-import type { KrowRPCSchema } from "../shared/types";
+import type { KrowRPCSchema, Theme } from "../shared/types";
 import { WorkspaceManager } from "./workspace";
 import { ensureOpencode } from "./opencode-installer";
 
 /**
  * Creates the RPC handler that bridges the webview and bun process.
  */
-export function createRpcHandler(workspace: WorkspaceManager, desktopPath: string, onOpenSettings: () => void) {
+export function createRpcHandler(
+  workspace: WorkspaceManager,
+  desktopPath: string,
+  onOpenSettings: () => void,
+  themeSync: { getTheme: () => Theme; setTheme: (theme: Theme) => void },
+) {
   let initPromise: Promise<{ path: string } | { error: string }> | null = null;
 
   const rpc = BrowserView.defineRPC<KrowRPCSchema>({
     maxRequestTime: 120000,
     handlers: {
       requests: {
+        getTheme: async () => {
+          return { theme: themeSync.getTheme() };
+        },
+
+        setTheme: async ({ theme }) => {
+          themeSync.setTheme(theme);
+          return { success: true };
+        },
+
         initWorkspace: async () => {
           if (!initPromise) {
             initPromise = (async () => {

@@ -14,14 +14,37 @@ export default function ChatInput({ onSend, disabled, onModelChange, refreshKey 
   const [models, setModels] = useState<ModelInfo[]>([]);
   const [currentModel, setCurrentModel] = useState<string | null>("opencode/big-pickle");
   const [showModels, setShowModels] = useState(false);
+  const currentModelRef = useRef<string | null>(currentModel);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
-    onModelChange({ providerID: "opencode", modelID: "big-pickle" });
+    currentModelRef.current = currentModel;
+  }, [currentModel]);
+
+  useEffect(() => {
+    const publishModel = (value: string | null) => {
+      if (!value) {
+        onModelChange(null);
+        return;
+      }
+
+      const [providerID, ...modelParts] = value.split("/");
+      const modelID = modelParts.join("/");
+      if (providerID && modelID) {
+        onModelChange({ providerID, modelID });
+      }
+    };
+
+    publishModel(currentModelRef.current);
     rpc.request.getProviders({}).then((res) => {
       if ("models" in res) {
         setModels(res.models);
+        const selected = currentModelRef.current;
+        if (selected && !res.models.some((model) => `${model.providerID}/${model.id}` === selected)) {
+          setCurrentModel(null);
+          onModelChange(null);
+        }
       }
     });
   }, [refreshKey]);
@@ -60,7 +83,9 @@ export default function ChatInput({ onSend, disabled, onModelChange, refreshKey 
   };
 
   const handleSelectModel = (model: ModelInfo) => {
-    setCurrentModel(`${model.providerID}/${model.id}`);
+    const value = `${model.providerID}/${model.id}`;
+    currentModelRef.current = value;
+    setCurrentModel(value);
     onModelChange({ providerID: model.providerID, modelID: model.id });
     setShowModels(false);
   };

@@ -1,16 +1,29 @@
 import { BrowserView } from "electrobun/bun";
-import type { SettingsRPCSchema } from "../shared/types";
+import type { SettingsRPCSchema, Theme } from "../shared/types";
 import { WorkspaceManager } from "./workspace";
 
 /**
  * Creates the RPC handler for the Settings window.
  * onSettingsChanged is called after any mutation to notify the main window.
  */
-export function createSettingsRpcHandler(workspace: WorkspaceManager, onSettingsChanged: () => void) {
+export function createSettingsRpcHandler(
+  workspace: WorkspaceManager,
+  onSettingsChanged: () => void,
+  themeSync: { getTheme: () => Theme; setTheme: (theme: Theme) => void },
+) {
   return BrowserView.defineRPC<SettingsRPCSchema>({
     maxRequestTime: 120000,
     handlers: {
       requests: {
+        getTheme: async () => {
+          return { theme: themeSync.getTheme() };
+        },
+
+        setTheme: async ({ theme }) => {
+          themeSync.setTheme(theme);
+          return { success: true };
+        },
+
         listProviderConnections: async () => {
           try {
             return await workspace.listProviderConnections();

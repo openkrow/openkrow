@@ -142,9 +142,19 @@ export type McpRemoteConfig = {
   headers?: Record<string, string>;
 };
 
+export type Theme = "dark" | "light" | "system";
+
 export type SettingsRPCSchema = {
   bun: {
     requests: {
+      getTheme: {
+        params: {};
+        response: { theme: Theme };
+      };
+      setTheme: {
+        params: { theme: Theme };
+        response: { success: boolean };
+      };
       listProviderConnections: {
         params: {};
         response: { providers: ProviderInfo[]; connected: string[] } | { error: string };
@@ -186,13 +196,23 @@ export type SettingsRPCSchema = {
   };
   webview: {
     requests: {};
-    messages: {};
+    messages: {
+      themeChanged: { theme: Theme };
+    };
   };
 };
 
 export type KrowRPCSchema = {
   bun: {
     requests: {
+      getTheme: {
+        params: {};
+        response: { theme: Theme };
+      };
+      setTheme: {
+        params: { theme: Theme };
+        response: { success: boolean };
+      };
       initWorkspace: {
         params: {};
         response: { path: string } | { error: string };
@@ -285,6 +305,7 @@ export type KrowRPCSchema = {
       sessionError: { sessionId: string; error: string };
       questionAsked: QuestionRequest;
       settingsChanged: {};
+      themeChanged: { theme: Theme };
       downloadProgress: { message: string };
     };
   };

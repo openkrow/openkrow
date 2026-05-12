@@ -44,6 +44,12 @@ export const rpc = Electroview.defineRPC<KrowRPCSchema>({
       settingsChanged: (payload) => {
         emit("settingsChanged", payload);
       },
+      themeChanged: (payload) => {
+        emit("themeChanged", payload);
+      },
+      downloadProgress: (payload) => {
+        emit("downloadProgress", payload);
+      },
     },
   },
 });

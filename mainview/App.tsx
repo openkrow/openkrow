@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { rpc, onStreamEvent } from "./rpc";
 import type { ChatMessage, MessagePart, SessionInfo, QuestionRequest } from "../shared/types";
 import MessageList from "../components/MessageList";
@@ -21,6 +21,11 @@ export default function App() {
   const [activeQuestion, setActiveQuestion] = useState<QuestionRequest | null>(null);
   const [settingsRefreshKey, setSettingsRefreshKey] = useState(0);
   const [loadingMessage, setLoadingMessage] = useState("Initializing...");
+  const sessionIdRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    sessionIdRef.current = sessionId;
+  }, [sessionId]);
 
   // Listen to streaming events
   useEffect(() => {
@@ -28,6 +33,7 @@ export default function App() {
 
     unsubs.push(onStreamEvent("partUpdated", (payload: { sessionId: string; messageId: string; part: MessagePart; delta?: string }) => {
       const { messageId, part } = payload;
+      if (payload.sessionId !== sessionIdRef.current) return;
 
       setMessages((prev) => {
         const existing = prev.find((m) => m.id === messageId);
@@ -57,18 +63,21 @@ export default function App() {
       });
     }));
 
-    unsubs.push(onStreamEvent("messageComplete", (payload: { messageId: string }) => {
+    unsubs.push(onStreamEvent("messageComplete", (payload: { sessionId: string; messageId: string }) => {
+      if (payload.sessionId !== sessionIdRef.current) return;
       setSending(false);
       setMessages((prev) =>
         prev.map((m) => m.id === payload.messageId ? { ...m, isLoading: false } : m)
       );
     }));
 
-    unsubs.push(onStreamEvent("sessionStatus", (payload: { status: string }) => {
+    unsubs.push(onStreamEvent("sessionStatus", (payload: { sessionId: string; status: string }) => {
+      if (payload.sessionId !== sessionIdRef.current) return;
       if (payload.status === "idle") setSending(false);
     }));
 
-    unsubs.push(onStreamEvent("sessionError", (payload: { error: string }) => {
+    unsubs.push(onStreamEvent("sessionError", (payload: { sessionId: string; error: string }) => {
+      if (payload.sessionId !== sessionIdRef.current) return;
       setSending(false);
       setMessages((prev) => [
         ...prev,
@@ -77,6 +86,7 @@ export default function App() {
     }));
 
     unsubs.push(onStreamEvent("questionAsked", (payload: QuestionRequest) => {
+      if (payload.sessionID !== sessionIdRef.current) return;
       setActiveQuestion(payload);
     }));
 
@@ -150,6 +160,8 @@ export default function App() {
     if ("sessionId" in res) {
       setSessionId(res.sessionId);
       setMessages([]);
+      setSending(false);
+      setActiveQuestion(null);
     }
   };
 
@@ -159,6 +171,8 @@ export default function App() {
     if ("sessionId" in res) {
       setSessionId(res.sessionId);
       setMessages(res.history);
+      setSending(false);
+      setActiveQuestion(null);
     }
   };
 

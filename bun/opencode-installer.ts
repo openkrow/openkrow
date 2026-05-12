@@ -4,10 +4,12 @@
  * Installs to ~/.opencode/bin/opencode (persists across app updates).
  */
 
-import { existsSync, mkdirSync, chmodSync } from "node:fs";
-import { execSync } from "node:child_process";
+import { existsSync, mkdirSync, chmodSync, rmSync } from "node:fs";
+import { writeFile } from "node:fs/promises";
+import { execFileSync, spawnSync } from "node:child_process";
 import { join } from "node:path";
-import { homedir } from "node:os";
+import { homedir, tmpdir } from "node:os";
+import { randomUUID } from "node:crypto";
 
 const REPO = "opencode-ai/opencode";
 const INSTALL_DIR = join(homedir(), ".opencode", "bin");
@@ -24,8 +26,8 @@ function getPlatformAsset(): string | null {
 
 function isOpencodeOnPath(): boolean {
   try {
-    execSync("opencode -v", { stdio: "pipe", timeout: 5000 });
-    return true;
+    const result = spawnSync("opencode", ["-v"], { stdio: "pipe", timeout: 5000 });
+    return result.status === 0;
   } catch {
     return false;
   }
@@ -51,15 +53,23 @@ export async function ensureOpencode(onProgress?: ProgressCallback): Promise<voi
   mkdirSync(INSTALL_DIR, { recursive: true });
 
   const url = `https://github.com/${REPO}/releases/latest/download/${asset}`;
+  const tmpDir = join(tmpdir(), `krow-opencode-${randomUUID()}`);
 
   try {
-    execSync(`curl -fsSL "${url}" | tar xz -C "${INSTALL_DIR}"`, {
-      stdio: "pipe",
-      timeout: 120000,
-    });
+    mkdirSync(tmpDir, { recursive: true });
+    const tarPath = join(tmpDir, asset);
+    const res = await fetch(url);
+    if (!res.ok) {
+      throw new Error(`HTTP ${res.status}`);
+    }
+
+    await writeFile(tarPath, Buffer.from(await res.arrayBuffer()) as any);
+    execFileSync("tar", ["xzf", tarPath, "-C", INSTALL_DIR], { stdio: "pipe", timeout: 120000 });
     chmodSync(BINARY_PATH, 0o755);
     onProgress?.("opencode installed successfully");
   } catch (err: any) {
     throw new Error(`Failed to download opencode: ${err?.message ?? String(err)}`);
+  } finally {
+    rmSync(tmpDir, { recursive: true, force: true });
   }
 }
