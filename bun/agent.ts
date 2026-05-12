@@ -1,4 +1,4 @@
-import type { AgentConfig } from "@opencode-ai/sdk";
+import type { AgentConfig } from "@opencode-ai/sdk/v2";
 import KROW_PROMPT from "../prompts/krow.txt"
 
 export const krowAgent: AgentConfig = {
