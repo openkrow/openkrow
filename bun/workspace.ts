@@ -1,6 +1,6 @@
 import { createOpencode } from "@opencode-ai/sdk/v2";
 import type { OpencodeClient } from "@opencode-ai/sdk/v2";
-import type { ChatMessage, MessagePart, ProviderInfo, ProviderAuthData, McpServerInfo, McpLocalConfig, McpRemoteConfig } from "../shared/types";
+import type { ChatMessage, MessagePart, ProviderInfo, ProviderAuthData, ProviderAuthMethod, ProviderOAuthStart, McpServerInfo, McpLocalConfig, McpRemoteConfig } from "../shared/types";
 import { krowAgent } from "./agent";
 import { EventStream, type RpcSend } from "./stream";
 import { SkillInstaller } from "./skills";
@@ -163,6 +163,14 @@ export class WorkspaceManager {
   }
 
   /**
+   * Stop the active agent work for a session without stopping the opencode server.
+   */
+  async stopSession(sessionId: string): Promise<void> {
+    if (!this.client) throw new Error("No workspace active");
+    await this.client.session.abort({ sessionID: sessionId });
+  }
+
+  /**
    * Get available providers and models.
    */
   async getProviders(): Promise<{ models: { id: string; name: string; providerID: string; providerName: string }[]; currentModel: string | null }> {
@@ -215,18 +223,25 @@ export class WorkspaceManager {
     const authMap: Record<string, any[]> = (authRes.data as any) ?? {};
 
     const connected = res.data.connected ?? [];
-    const providers: ProviderInfo[] = res.data.all.map((p: any) => ({
-      id: p.id,
-      name: p.name,
-      connected: connected.includes(p.id),
-      models: Object.entries(p.models || {}).map(([id, m]: [string, any]) => ({
-        id,
-        name: m.name,
-      })),
-      authMethods: authMap[p.id] ?? [],
-    }));
+    const providers: ProviderInfo[] = res.data.all.map((p: any) => {
+      const authMethods = authMap[p.id] ?? [];
+      return {
+        id: p.id,
+        name: p.name,
+        connected: connected.includes(p.id),
+        models: Object.entries(p.models || {}).map(([id, m]: [string, any]) => ({
+          id,
+          name: m.name,
+        })),
+        authMethods: authMethods.length > 0 ? authMethods : WorkspaceManager.defaultApiAuthMethods(),
+      };
+    });
 
     return { providers, connected };
+  }
+
+  private static defaultApiAuthMethods(): ProviderAuthMethod[] {
+    return [{ type: "api", label: "API Key" }];
   }
 
   async setProviderAuth(providerID: string, auth: ProviderAuthData): Promise<void> {
@@ -234,7 +249,7 @@ export class WorkspaceManager {
     await this.client.auth.set({ providerID, auth: auth as any });
   }
 
-  async startProviderOAuth(providerID: string, methodIndex: number, inputs?: Record<string, string>): Promise<{ url: string; method: string; instructions: string }> {
+  async startProviderOAuth(providerID: string, methodIndex: number, inputs?: Record<string, string>): Promise<ProviderOAuthStart> {
     if (!this.client) throw new Error("No workspace active");
     const res = await this.client.provider.oauth.authorize({
       providerID,
@@ -242,16 +257,22 @@ export class WorkspaceManager {
       inputs,
     });
     if (!res.data) throw new Error("Failed to start OAuth");
-    return { url: (res.data as any).url, method: (res.data as any).method, instructions: (res.data as any).instructions };
+    return {
+      url: res.data.url,
+      method: res.data.method,
+      instructions: res.data.instructions,
+    };
   }
 
-  async completeProviderOAuth(providerID: string, methodIndex: number, code: string): Promise<void> {
+  async completeProviderOAuth(providerID: string, methodIndex: number, code?: string): Promise<void> {
     if (!this.client) throw new Error("No workspace active");
-    await this.client.provider.oauth.callback({
+    const params: { providerID: string; method: number; code?: string } = {
       providerID,
       method: methodIndex,
-      code,
-    });
+    };
+    if (code) params.code = code;
+    const res = await this.client.provider.oauth.callback(params);
+    if (res.data !== true) throw new Error("OAuth callback failed");
   }
 
   async removeProviderAuth(providerID: string): Promise<void> {

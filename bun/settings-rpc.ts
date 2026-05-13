@@ -1,16 +1,29 @@
-import { BrowserView } from "electrobun/bun";
-import type { SettingsRPCSchema } from "../shared/types";
+import { BrowserView, Utils } from "electrobun/bun";
+import type { SettingsRPCSchema, Theme } from "../shared/types";
 import { WorkspaceManager } from "./workspace";
 
 /**
  * Creates the RPC handler for the Settings window.
  * onSettingsChanged is called after any mutation to notify the main window.
  */
-export function createSettingsRpcHandler(workspace: WorkspaceManager, onSettingsChanged: () => void) {
+export function createSettingsRpcHandler(
+  workspace: WorkspaceManager,
+  onSettingsChanged: () => void,
+  themeSync: { getTheme: () => Theme; setTheme: (theme: Theme) => void },
+) {
   return BrowserView.defineRPC<SettingsRPCSchema>({
     maxRequestTime: 120000,
     handlers: {
       requests: {
+        getTheme: async () => {
+          return { theme: themeSync.getTheme() };
+        },
+
+        setTheme: async ({ theme }) => {
+          themeSync.setTheme(theme);
+          return { success: true };
+        },
+
         listProviderConnections: async () => {
           try {
             return await workspace.listProviderConnections();
@@ -31,7 +44,16 @@ export function createSettingsRpcHandler(workspace: WorkspaceManager, onSettings
 
         startProviderOAuth: async ({ providerID, methodIndex, inputs }) => {
           try {
-            return await workspace.startProviderOAuth(providerID, methodIndex, inputs);
+            const result = await workspace.startProviderOAuth(providerID, methodIndex, inputs);
+            return { ...result, opened: result.url ? Utils.openExternal(result.url) : false };
+          } catch (err: any) {
+            return { error: err?.message ?? String(err) };
+          }
+        },
+
+        openExternalUrl: async ({ url }) => {
+          try {
+            return { success: Utils.openExternal(url) };
           } catch (err: any) {
             return { error: err?.message ?? String(err) };
           }

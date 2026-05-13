@@ -1,44 +1,20 @@
 import { useState, useEffect } from "react";
 import { rpc } from "./rpc";
-import type { ProviderInfo, McpServerInfo, ProviderAuthPrompt } from "../shared/types";
-
-type Tab = "providers" | "mcp";
+import type { ProviderInfo, McpServerInfo, ProviderAuthPrompt, ProviderOAuthStart } from "../shared/types";
 
 export default function App() {
-  const [tab, setTab] = useState<Tab>("providers");
-
   return (
     <div className="flex flex-col h-screen bg-surface text-text-primary">
       {/* Draggable title bar area */}
       <div className="shrink-0" style={{ height: "1.75rem", WebkitAppRegion: "drag" } as any} />
 
-      {/* Tabs */}
-      <div className="flex border-b border-ghost-border px-5 shrink-0">
-        <button
-          onClick={() => setTab("providers")}
-          className={`px-3 py-2.5 font-mono text-[11px] uppercase tracking-[0.15em] border-b-2 transition-colors ${
-            tab === "providers"
-              ? "border-ember text-ember-light"
-              : "border-transparent text-text-muted hover:text-text-primary"
-          }`}
-        >
-          Providers
-        </button>
-        <button
-          onClick={() => setTab("mcp")}
-          className={`px-3 py-2.5 font-mono text-[11px] uppercase tracking-[0.15em] border-b-2 transition-colors ${
-            tab === "mcp"
-              ? "border-ember text-ember-light"
-              : "border-transparent text-text-muted hover:text-text-primary"
-          }`}
-        >
-          MCP Servers
-        </button>
+      <div className="border-b border-ghost-border px-5 py-3 shrink-0">
+        <h1 className="font-display text-sm font-semibold text-text-primary">Settings</h1>
       </div>
 
       {/* Content */}
       <div className="flex-1 overflow-y-auto p-5">
-        {tab === "providers" ? <ProvidersTab /> : <McpTab />}
+        <ProvidersTab />
       </div>
     </div>
   );
@@ -162,8 +138,9 @@ function ProviderAuthForm({ provider, onDone, onCancel }: {
   const [selectedMethod, setSelectedMethod] = useState(0);
   const [inputs, setInputs] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
-  const [oauthStep, setOauthStep] = useState<null | { url: string; instructions: string }>(null);
+  const [oauthStep, setOauthStep] = useState<ProviderOAuthStart | null>(null);
   const [oauthCode, setOauthCode] = useState("");
+  const [oauthWaiting, setOauthWaiting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   if (!methods || methods.length === 0) {
@@ -235,8 +212,19 @@ function ProviderAuthForm({ provider, onDone, onCancel }: {
       if ("error" in res) {
         setError(res.error);
       } else {
-        setOauthStep({ url: res.url, instructions: res.instructions });
-        window.open(res.url, "_blank");
+        setOauthStep(res);
+        if (res.method === "auto") {
+          setSaving(false);
+          setOauthWaiting(true);
+          const callbackRes = await rpc.request.completeProviderOAuth({
+            providerID: provider.id,
+            methodIndex: selectedMethod,
+          });
+          setOauthWaiting(false);
+          if ("error" in callbackRes) setError(callbackRes.error);
+          else onDone();
+          return;
+        }
       }
     } catch (err: any) {
       setError(err?.message ?? String(err));
@@ -265,6 +253,12 @@ function ProviderAuthForm({ provider, onDone, onCancel }: {
     setSaving(false);
   };
 
+  const handleOAuthLinkOpen = async (url: string) => {
+    const res = await rpc.request.openExternalUrl({ url });
+    if ("error" in res) setError(res.error);
+    else if (!res.success) setError("Could not open authorization link. Copy the URL below into your browser.");
+  };
+
   const inputClasses = "w-full bg-surface-100 border border-ghost-border rounded-xl px-3.5 py-2 text-xs text-text-primary placeholder:text-text-faint outline-none focus:border-surface-500 transition-colors";
 
   return (
@@ -274,7 +268,7 @@ function ProviderAuthForm({ provider, onDone, onCancel }: {
           {methods.map((m, i) => (
             <button
               key={i}
-              onClick={() => { setSelectedMethod(i); setOauthStep(null); setOauthCode(""); setError(null); setInputs({}); }}
+              onClick={() => { setSelectedMethod(i); setOauthStep(null); setOauthCode(""); setOauthWaiting(false); setError(null); setInputs({}); }}
               className={`px-3 py-1 font-mono text-[11px] rounded-full border transition-colors ${
                 selectedMethod === i
                   ? "bg-ember-subtle border-ember/30 text-ember-light"
@@ -339,20 +333,40 @@ function ProviderAuthForm({ provider, onDone, onCancel }: {
       )}
 
       {method.type === "oauth" && oauthStep && (
-        <div className="space-y-2">
-          <p className="text-[11px] text-text-muted leading-relaxed">{oauthStep.instructions || "A browser window has opened. Paste the authorization code below."}</p>
-          <input
-            type="text"
-            value={oauthCode}
-            onChange={(e) => setOauthCode(e.target.value)}
-            placeholder="Paste authorization code..."
-            autoFocus
-            className={inputClasses}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") handleOAuthComplete();
-              if (e.key === "Escape") onCancel();
-            }}
-          />
+        <div className="space-y-3">
+          <p className="text-[11px] text-text-muted leading-relaxed">
+            {oauthStep.instructions || (oauthStep.method === "auto" ? "Complete authorization in your browser." : oauthStep.opened ? "A browser window has opened. Paste the authorization code below." : "Open the authorization link, then paste the authorization code below.")}
+          </p>
+          {oauthStep.url && (
+            <div className="space-y-1.5 rounded-lg border border-ghost-border bg-surface-100/70 p-2.5">
+              <button
+                type="button"
+                onClick={() => handleOAuthLinkOpen(oauthStep.url)}
+                className="font-mono text-[11px] text-ember-light hover:text-ember transition-colors"
+              >
+                Open authorization link
+              </button>
+              <p className="break-all font-mono text-[10px] leading-relaxed text-text-faint">{oauthStep.url}</p>
+            </div>
+          )}
+          {oauthStep.method === "auto" ? (
+            <p className="font-mono text-[10px] text-text-faint">
+              {oauthWaiting ? "Waiting for browser authorization..." : "Browser authorization complete."}
+            </p>
+          ) : (
+            <input
+              type="text"
+              value={oauthCode}
+              onChange={(e) => setOauthCode(e.target.value)}
+              placeholder="Paste authorization code..."
+              autoFocus
+              className={inputClasses}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") handleOAuthComplete();
+                if (e.key === "Escape") onCancel();
+              }}
+            />
+          )}
         </div>
       )}
 
@@ -386,10 +400,10 @@ function ProviderAuthForm({ provider, onDone, onCancel }: {
         {method.type === "oauth" && oauthStep && (
           <button
             onClick={handleOAuthComplete}
-            disabled={saving || !oauthCode.trim()}
+            disabled={saving || oauthWaiting || oauthStep.method === "auto" || !oauthCode.trim()}
             className="px-5 py-1.5 bg-ember text-obsidian rounded-full text-xs font-display font-semibold hover:bg-ember-light transition-all shadow-[0_0_20px_var(--color-ember-glow)] disabled:opacity-40 disabled:shadow-none"
           >
-            {saving ? "Verifying..." : "Submit Code"}
+            {oauthWaiting ? "Waiting..." : saving ? "Verifying..." : "Submit Code"}
           </button>
         )}
       </div>

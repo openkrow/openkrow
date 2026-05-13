@@ -1,18 +1,32 @@
-import { BrowserView } from "electrobun/bun";
-import type { KrowRPCSchema } from "../shared/types";
+import { BrowserView, Utils } from "electrobun/bun";
+import type { KrowRPCSchema, Theme } from "../shared/types";
 import { WorkspaceManager } from "./workspace";
 import { ensureOpencode } from "./opencode-installer";
 
 /**
  * Creates the RPC handler that bridges the webview and bun process.
  */
-export function createRpcHandler(workspace: WorkspaceManager, desktopPath: string, onOpenSettings: () => void) {
+export function createRpcHandler(
+  workspace: WorkspaceManager,
+  desktopPath: string,
+  onOpenSettings: () => void,
+  themeSync: { getTheme: () => Theme; setTheme: (theme: Theme) => void },
+) {
   let initPromise: Promise<{ path: string } | { error: string }> | null = null;
 
   const rpc = BrowserView.defineRPC<KrowRPCSchema>({
     maxRequestTime: 120000,
     handlers: {
       requests: {
+        getTheme: async () => {
+          return { theme: themeSync.getTheme() };
+        },
+
+        setTheme: async ({ theme }) => {
+          themeSync.setTheme(theme);
+          return { success: true };
+        },
+
         initWorkspace: async () => {
           if (!initPromise) {
             initPromise = (async () => {
@@ -78,6 +92,15 @@ export function createRpcHandler(workspace: WorkspaceManager, desktopPath: strin
           }
         },
 
+        stopSession: async ({ sessionId }) => {
+          try {
+            await workspace.stopSession(sessionId);
+            return { success: true };
+          } catch (err: any) {
+            return { error: err?.message ?? String(err) };
+          }
+        },
+
         getProviders: async () => {
           try {
             return await workspace.getProviders();
@@ -129,7 +152,16 @@ export function createRpcHandler(workspace: WorkspaceManager, desktopPath: strin
 
         startProviderOAuth: async ({ providerID, methodIndex, inputs }) => {
           try {
-            return await workspace.startProviderOAuth(providerID, methodIndex, inputs);
+            const result = await workspace.startProviderOAuth(providerID, methodIndex, inputs);
+            return { ...result, opened: result.url ? Utils.openExternal(result.url) : false };
+          } catch (err: any) {
+            return { error: err?.message ?? String(err) };
+          }
+        },
+
+        openExternalUrl: async ({ url }) => {
+          try {
+            return { success: Utils.openExternal(url) };
           } catch (err: any) {
             return { error: err?.message ?? String(err) };
           }

@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { rpc, onStreamEvent } from "./rpc";
 import type { ChatMessage, MessagePart, SessionInfo, QuestionRequest } from "../shared/types";
 import MessageList from "../components/MessageList";
@@ -21,6 +21,16 @@ export default function App() {
   const [activeQuestion, setActiveQuestion] = useState<QuestionRequest | null>(null);
   const [settingsRefreshKey, setSettingsRefreshKey] = useState(0);
   const [loadingMessage, setLoadingMessage] = useState("Initializing...");
+  const sessionIdRef = useRef<string | null>(null);
+  const sendingRef = useRef(false);
+
+  useEffect(() => {
+    sessionIdRef.current = sessionId;
+  }, [sessionId]);
+
+  useEffect(() => {
+    sendingRef.current = sending;
+  }, [sending]);
 
   // Listen to streaming events
   useEffect(() => {
@@ -28,6 +38,7 @@ export default function App() {
 
     unsubs.push(onStreamEvent("partUpdated", (payload: { sessionId: string; messageId: string; part: MessagePart; delta?: string }) => {
       const { messageId, part } = payload;
+      if (payload.sessionId !== sessionIdRef.current) return;
 
       setMessages((prev) => {
         const existing = prev.find((m) => m.id === messageId);
@@ -57,18 +68,22 @@ export default function App() {
       });
     }));
 
-    unsubs.push(onStreamEvent("messageComplete", (payload: { messageId: string }) => {
+    unsubs.push(onStreamEvent("messageComplete", (payload: { sessionId: string; messageId: string }) => {
+      if (payload.sessionId !== sessionIdRef.current) return;
       setSending(false);
       setMessages((prev) =>
         prev.map((m) => m.id === payload.messageId ? { ...m, isLoading: false } : m)
       );
     }));
 
-    unsubs.push(onStreamEvent("sessionStatus", (payload: { status: string }) => {
-      if (payload.status === "idle") setSending(false);
+    unsubs.push(onStreamEvent("sessionStatus", (payload: { sessionId: string; status: string }) => {
+      if (payload.sessionId !== sessionIdRef.current) return;
+      if (payload.status === "busy") setSending(true);
+      else if (payload.status === "idle") setSending(false);
     }));
 
-    unsubs.push(onStreamEvent("sessionError", (payload: { error: string }) => {
+    unsubs.push(onStreamEvent("sessionError", (payload: { sessionId: string; error: string }) => {
+      if (payload.sessionId !== sessionIdRef.current) return;
       setSending(false);
       setMessages((prev) => [
         ...prev,
@@ -77,6 +92,7 @@ export default function App() {
     }));
 
     unsubs.push(onStreamEvent("questionAsked", (payload: QuestionRequest) => {
+      if (payload.sessionID !== sessionIdRef.current) return;
       setActiveQuestion(payload);
     }));
 
@@ -145,11 +161,43 @@ export default function App() {
     }
   };
 
+  const handleStopSession = async () => {
+    const currentSessionId = sessionIdRef.current;
+    console.log("Attempting to stop session:", currentSessionId, sendingRef.current);
+    if (!currentSessionId || !sendingRef.current) return;
+
+    const res = await rpc.request.stopSession({ sessionId: currentSessionId });
+    console.log("Stop session response:", res);
+    if ("error" in res) {
+      setMessages((prev) => [
+        ...prev,
+        { id: crypto.randomUUID(), role: "assistant", text: `Error: ${res.error}`, createdAt: Date.now() },
+      ]);
+      return;
+    }
+    setSending(false);
+  };
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      console.log("Key down:", event.key, sendingRef.current);
+      if (event.key === "Escape" && sendingRef.current) {
+        event.preventDefault();
+        void handleStopSession();
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
+
   const handleNewSession = async () => {
     const res = await rpc.request.newSession({});
     if ("sessionId" in res) {
       setSessionId(res.sessionId);
       setMessages([]);
+      setSending(false);
+      setActiveQuestion(null);
     }
   };
 
@@ -159,6 +207,8 @@ export default function App() {
     if ("sessionId" in res) {
       setSessionId(res.sessionId);
       setMessages(res.history);
+      setSending(false);
+      setActiveQuestion(null);
     }
   };
 
@@ -265,7 +315,7 @@ export default function App() {
       )}
 
       {/* Input */}
-      <ChatInput onSend={handleSend} disabled={sending || !!activeQuestion} onModelChange={setSelectedModel} refreshKey={settingsRefreshKey} />
+      <ChatInput onSend={handleSend} onStop={handleStopSession} disabled={sending || !!activeQuestion} sending={sending} onModelChange={setSelectedModel} refreshKey={settingsRefreshKey} />
     </div>
   );
 }

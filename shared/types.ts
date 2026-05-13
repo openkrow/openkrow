@@ -116,6 +116,13 @@ export type ProviderAuthMethod = {
   prompts?: ProviderAuthPrompt[];
 };
 
+export type ProviderOAuthStart = {
+  url: string;
+  method: "auto" | "code";
+  instructions: string;
+  opened?: boolean;
+};
+
 export type ProviderAuthData =
   | { type: "api"; key: string; metadata?: Record<string, string> }
   | { type: "oauth"; refresh: string; access: string; expires: number }
@@ -142,9 +149,19 @@ export type McpRemoteConfig = {
   headers?: Record<string, string>;
 };
 
+export type Theme = "dark" | "light" | "system";
+
 export type SettingsRPCSchema = {
   bun: {
     requests: {
+      getTheme: {
+        params: {};
+        response: { theme: Theme };
+      };
+      setTheme: {
+        params: { theme: Theme };
+        response: { success: boolean };
+      };
       listProviderConnections: {
         params: {};
         response: { providers: ProviderInfo[]; connected: string[] } | { error: string };
@@ -155,10 +172,14 @@ export type SettingsRPCSchema = {
       };
       startProviderOAuth: {
         params: { providerID: string; methodIndex: number; inputs?: Record<string, string> };
-        response: { url: string; method: string; instructions: string } | { error: string };
+        response: ProviderOAuthStart | { error: string };
+      };
+      openExternalUrl: {
+        params: { url: string };
+        response: { success: boolean } | { error: string };
       };
       completeProviderOAuth: {
-        params: { providerID: string; methodIndex: number; code: string };
+        params: { providerID: string; methodIndex: number; code?: string };
         response: { success: boolean } | { error: string };
       };
       removeProviderAuth: {
@@ -186,13 +207,23 @@ export type SettingsRPCSchema = {
   };
   webview: {
     requests: {};
-    messages: {};
+    messages: {
+      themeChanged: { theme: Theme };
+    };
   };
 };
 
 export type KrowRPCSchema = {
   bun: {
     requests: {
+      getTheme: {
+        params: {};
+        response: { theme: Theme };
+      };
+      setTheme: {
+        params: { theme: Theme };
+        response: { success: boolean };
+      };
       initWorkspace: {
         params: {};
         response: { path: string } | { error: string };
@@ -215,6 +246,10 @@ export type KrowRPCSchema = {
       };
       sendMessage: {
         params: { sessionId: string; text: string; model?: { providerID: string; modelID: string } };
+        response: { success: boolean } | { error: string };
+      };
+      stopSession: {
+        params: { sessionId: string };
         response: { success: boolean } | { error: string };
       };
       getProviders: {
@@ -244,10 +279,14 @@ export type KrowRPCSchema = {
       };
       startProviderOAuth: {
         params: { providerID: string; methodIndex: number; inputs?: Record<string, string> };
-        response: { url: string; method: string; instructions: string } | { error: string };
+        response: ProviderOAuthStart | { error: string };
+      };
+      openExternalUrl: {
+        params: { url: string };
+        response: { success: boolean } | { error: string };
       };
       completeProviderOAuth: {
-        params: { providerID: string; methodIndex: number; code: string };
+        params: { providerID: string; methodIndex: number; code?: string };
         response: { success: boolean } | { error: string };
       };
       removeProviderAuth: {
@@ -285,6 +324,7 @@ export type KrowRPCSchema = {
       sessionError: { sessionId: string; error: string };
       questionAsked: QuestionRequest;
       settingsChanged: {};
+      themeChanged: { theme: Theme };
       downloadProgress: { message: string };
     };
   };

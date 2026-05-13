@@ -4,24 +4,49 @@ import type { ModelInfo } from "../shared/types";
 
 type Props = {
   onSend: (text: string) => void;
+  onStop?: () => void;
   disabled: boolean;
+  sending?: boolean;
   onModelChange: (model: { providerID: string; modelID: string } | null) => void;
   refreshKey?: number;
 };
 
-export default function ChatInput({ onSend, disabled, onModelChange, refreshKey }: Props) {
+export default function ChatInput({ onSend, onStop, disabled, sending, onModelChange, refreshKey }: Props) {
   const [input, setInput] = useState("");
   const [models, setModels] = useState<ModelInfo[]>([]);
   const [currentModel, setCurrentModel] = useState<string | null>("opencode/big-pickle");
   const [showModels, setShowModels] = useState(false);
+  const currentModelRef = useRef<string | null>(currentModel);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
-    onModelChange({ providerID: "opencode", modelID: "big-pickle" });
+    currentModelRef.current = currentModel;
+  }, [currentModel]);
+
+  useEffect(() => {
+    const publishModel = (value: string | null) => {
+      if (!value) {
+        onModelChange(null);
+        return;
+      }
+
+      const [providerID, ...modelParts] = value.split("/");
+      const modelID = modelParts.join("/");
+      if (providerID && modelID) {
+        onModelChange({ providerID, modelID });
+      }
+    };
+
+    publishModel(currentModelRef.current);
     rpc.request.getProviders({}).then((res) => {
       if ("models" in res) {
         setModels(res.models);
+        const selected = currentModelRef.current;
+        if (selected && !res.models.some((model) => `${model.providerID}/${model.id}` === selected)) {
+          setCurrentModel(null);
+          onModelChange(null);
+        }
       }
     });
   }, [refreshKey]);
@@ -60,7 +85,9 @@ export default function ChatInput({ onSend, disabled, onModelChange, refreshKey 
   };
 
   const handleSelectModel = (model: ModelInfo) => {
-    setCurrentModel(`${model.providerID}/${model.id}`);
+    const value = `${model.providerID}/${model.id}`;
+    currentModelRef.current = value;
+    setCurrentModel(value);
     onModelChange({ providerID: model.providerID, modelID: model.id });
     setShowModels(false);
   };
@@ -120,16 +147,28 @@ export default function ChatInput({ onSend, disabled, onModelChange, refreshKey 
               )}
             </div>
 
-            {/* Send button */}
-            <button
-              onClick={handleSend}
-              disabled={!input.trim() || disabled}
-              className="p-1.5 rounded-full bg-ember text-obsidian hover:bg-ember-light transition-all shadow-[0_0_20px_var(--color-ember-glow)] hover:shadow-[0_0_30px_var(--color-ember-glow)] disabled:opacity-20 disabled:shadow-none disabled:cursor-not-allowed"
-            >
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 10.5L12 3m0 0l7.5 7.5M12 3v18" />
-              </svg>
-            </button>
+            {/* Send / Stop button */}
+            {sending ? (
+              <button
+                onClick={onStop}
+                className="p-1.5 rounded-full bg-red-500/80 text-white hover:bg-red-500 transition-all shadow-[0_0_12px_rgba(239,68,68,0.3)]"
+                title="Stop generating (Esc)"
+              >
+                <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                  <rect x="6" y="6" width="12" height="12" rx="1" />
+                </svg>
+              </button>
+            ) : (
+              <button
+                onClick={handleSend}
+                disabled={!input.trim() || disabled}
+                className="p-1.5 rounded-full bg-ember text-obsidian hover:bg-ember-light transition-all shadow-[0_0_20px_var(--color-ember-glow)] hover:shadow-[0_0_30px_var(--color-ember-glow)] disabled:opacity-20 disabled:shadow-none disabled:cursor-not-allowed"
+              >
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 10.5L12 3m0 0l7.5 7.5M12 3v18" />
+                </svg>
+              </button>
+            )}
           </div>
         </div>
       </div>
