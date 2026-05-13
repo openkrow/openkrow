@@ -163,6 +163,14 @@ export class WorkspaceManager {
   }
 
   /**
+   * Stop the active agent work for a session without stopping the opencode server.
+   */
+  async stopSession(sessionId: string): Promise<void> {
+    if (!this.client) throw new Error("No workspace active");
+    await this.client.session.abort({ sessionID: sessionId });
+  }
+
+  /**
    * Get available providers and models.
    */
   async getProviders(): Promise<{ models: { id: string; name: string; providerID: string; providerName: string }[]; currentModel: string | null }> {

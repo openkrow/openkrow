@@ -92,6 +92,15 @@ export function createRpcHandler(
           }
         },
 
+        stopSession: async ({ sessionId }) => {
+          try {
+            await workspace.stopSession(sessionId);
+            return { success: true };
+          } catch (err: any) {
+            return { error: err?.message ?? String(err) };
+          }
+        },
+
         getProviders: async () => {
           try {
             return await workspace.getProviders();

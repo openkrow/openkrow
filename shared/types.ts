@@ -248,6 +248,10 @@ export type KrowRPCSchema = {
         params: { sessionId: string; text: string; model?: { providerID: string; modelID: string } };
         response: { success: boolean } | { error: string };
       };
+      stopSession: {
+        params: { sessionId: string };
+        response: { success: boolean } | { error: string };
+      };
       getProviders: {
         params: {};
         response: { models: ModelInfo[]; currentModel: string | null } | { error: string };

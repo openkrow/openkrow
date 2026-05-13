@@ -22,10 +22,15 @@ export default function App() {
   const [settingsRefreshKey, setSettingsRefreshKey] = useState(0);
   const [loadingMessage, setLoadingMessage] = useState("Initializing...");
   const sessionIdRef = useRef<string | null>(null);
+  const sendingRef = useRef(false);
 
   useEffect(() => {
     sessionIdRef.current = sessionId;
   }, [sessionId]);
+
+  useEffect(() => {
+    sendingRef.current = sending;
+  }, [sending]);
 
   // Listen to streaming events
   useEffect(() => {
@@ -73,7 +78,8 @@ export default function App() {
 
     unsubs.push(onStreamEvent("sessionStatus", (payload: { sessionId: string; status: string }) => {
       if (payload.sessionId !== sessionIdRef.current) return;
-      if (payload.status === "idle") setSending(false);
+      if (payload.status === "busy") setSending(true);
+      else if (payload.status === "idle") setSending(false);
     }));
 
     unsubs.push(onStreamEvent("sessionError", (payload: { sessionId: string; error: string }) => {
@@ -154,6 +160,36 @@ export default function App() {
       ]);
     }
   };
+
+  const handleStopSession = async () => {
+    const currentSessionId = sessionIdRef.current;
+    console.log("Attempting to stop session:", currentSessionId, sendingRef.current);
+    if (!currentSessionId || !sendingRef.current) return;
+
+    const res = await rpc.request.stopSession({ sessionId: currentSessionId });
+    console.log("Stop session response:", res);
+    if ("error" in res) {
+      setMessages((prev) => [
+        ...prev,
+        { id: crypto.randomUUID(), role: "assistant", text: `Error: ${res.error}`, createdAt: Date.now() },
+      ]);
+      return;
+    }
+    setSending(false);
+  };
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      console.log("Key down:", event.key, sendingRef.current);
+      if (event.key === "Escape" && sendingRef.current) {
+        event.preventDefault();
+        void handleStopSession();
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
 
   const handleNewSession = async () => {
     const res = await rpc.request.newSession({});
@@ -279,7 +315,7 @@ export default function App() {
       )}
 
       {/* Input */}
-      <ChatInput onSend={handleSend} disabled={sending || !!activeQuestion} onModelChange={setSelectedModel} refreshKey={settingsRefreshKey} />
+      <ChatInput onSend={handleSend} onStop={handleStopSession} disabled={sending || !!activeQuestion} sending={sending} onModelChange={setSelectedModel} refreshKey={settingsRefreshKey} />
     </div>
   );
 }
