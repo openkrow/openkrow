@@ -44,7 +44,7 @@ export default function SessionHistory({ onSelect, onClose, currentSessionId }: 
   return (
     <div
       ref={ref}
-      className="absolute top-14 right-3 w-72 max-h-96 overflow-y-auto glass-card shadow-2xl z-50 animate-reveal"
+      className="absolute top-14 right-3 w-72 max-h-96 overflow-y-auto glass-elevated z-50 animate-reveal"
     >
       <div className="px-4 py-3 border-b border-ghost-border">
         <span className="font-mono text-[11px] uppercase tracking-[0.2em] text-text-muted">History</span>

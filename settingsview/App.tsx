@@ -8,7 +8,7 @@ export default function App() {
       {/* Draggable title bar area */}
       <div className="shrink-0" style={{ height: "1.75rem", WebkitAppRegion: "drag" } as any} />
 
-      <div className="border-b border-ghost-border px-5 py-3 shrink-0">
+      <div className="glass-toolbar px-5 py-3 shrink-0">
         <h1 className="font-display text-sm font-semibold text-text-primary">Settings</h1>
       </div>
 
@@ -68,7 +68,7 @@ function ProvidersTab() {
         value={search}
         onChange={(e) => setSearch(e.target.value)}
         placeholder="Search providers..."
-        className="w-full bg-surface-200/50 border border-ghost-border rounded-xl px-3.5 py-2.5 text-xs text-text-primary placeholder:text-text-faint outline-none focus:border-surface-500 transition-colors"
+        className="w-full glass-input px-3.5 py-2.5 text-xs text-text-primary placeholder:text-text-faint outline-none transition-colors"
       />
       {filtered.map((provider) => (
         <div key={provider.id} className="glass-card p-4">
@@ -259,7 +259,7 @@ function ProviderAuthForm({ provider, onDone, onCancel }: {
     else if (!res.success) setError("Could not open authorization link. Copy the URL below into your browser.");
   };
 
-  const inputClasses = "w-full bg-surface-100 border border-ghost-border rounded-xl px-3.5 py-2 text-xs text-text-primary placeholder:text-text-faint outline-none focus:border-surface-500 transition-colors";
+  const inputClasses = "w-full glass-input px-3.5 py-2 text-xs text-text-primary placeholder:text-text-faint outline-none transition-colors";
 
   return (
     <div className="mt-4 pt-4 border-t border-ghost-border space-y-3">
@@ -375,7 +375,7 @@ function ProviderAuthForm({ provider, onDone, onCancel }: {
       <div className="flex gap-2 justify-end">
         <button
           onClick={onCancel}
-          className="px-4 py-1.5 text-xs text-text-muted hover:text-text-primary transition-colors rounded-full border border-transparent hover:border-ghost-border"
+          className="px-4 py-1.5 text-xs text-text-muted hover:text-text-primary transition-colors glass-btn !rounded-full"
         >
           Cancel
         </button>
@@ -492,7 +492,7 @@ function McpTab() {
     return <div className="font-mono text-[11px] text-text-muted text-center py-8">Loading MCP servers...</div>;
   }
 
-  const inputClasses = "w-full bg-surface-100 border border-ghost-border rounded-xl px-3.5 py-2 text-xs text-text-primary placeholder:text-text-faint outline-none focus:border-surface-500 transition-colors";
+  const inputClasses = "w-full glass-input px-3.5 py-2 text-xs text-text-primary placeholder:text-text-faint outline-none transition-colors";
 
   return (
     <div className="space-y-2.5">
@@ -607,7 +607,7 @@ function McpTab() {
       ) : (
         <button
           onClick={() => setShowAdd(true)}
-          className="w-full py-3 border border-dashed border-surface-400 rounded-2xl font-mono text-[11px] text-text-muted hover:text-ember-light hover:border-ember/30 transition-colors"
+          className="w-full py-3 glass-card !border-dashed !border-surface-400 font-mono text-[11px] text-text-muted hover:text-ember-light hover:!border-ember/30 transition-colors"
         >
           + Add MCP Server
         </button>

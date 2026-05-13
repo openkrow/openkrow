@@ -105,16 +105,16 @@ export default function ChatInput({ onSend, onStop, disabled, sending, onModelCh
             onKeyDown={handleKeyDown}
             placeholder="Message Krow..."
             rows={1}
-            className="w-full bg-transparent text-text-primary px-4 pt-3.5 pb-11 text-sm resize-none outline-none placeholder:text-text-faint leading-relaxed"
+            className="w-full bg-transparent text-text-primary px-4 pt-3.5 pb-11 text-sm resize-none outline-none placeholder:text-text-faint leading-relaxed selection:bg-ember-subtle selection:text-ember-light"
           />
           {/* Bottom bar */}
           <div className="absolute bottom-2.5 left-3 right-3 flex items-center justify-between">
             {/* Model selector */}
             <div className="relative" ref={dropdownRef}>
-              <button
-                onClick={() => setShowModels(!showModels)}
-                className="flex items-center gap-1.5 px-2.5 py-1 rounded-full hover:bg-ghost-hover transition-colors font-mono text-[11px] text-text-muted border border-transparent hover:border-ghost-border"
-              >
+                <button
+                  onClick={() => setShowModels(!showModels)}
+                  className="flex items-center gap-1.5 px-2.5 py-1 rounded-full glass-btn !rounded-full font-mono text-[11px] text-text-muted !border-transparent hover:!border-ghost-border"
+                >
                 <span className="truncate max-w-[140px]">{selectedModel?.name ?? currentModel ?? "Model"}</span>
                 <svg className="w-3 h-3 shrink-0 opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
@@ -122,7 +122,7 @@ export default function ChatInput({ onSend, onStop, disabled, sending, onModelCh
               </button>
 
               {showModels && (
-                <div className="absolute bottom-full left-0 mb-2 w-72 max-h-72 overflow-y-auto glass-card !rounded-xl shadow-2xl z-50 py-1">
+                <div className="absolute bottom-full left-0 mb-2 w-72 max-h-72 overflow-y-auto glass-elevated !rounded-xl z-50 py-1">
                   {models.map((model) => {
                     const isSelected = `${model.providerID}/${model.id}` === currentModel;
                     return (
