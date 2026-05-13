@@ -73,8 +73,8 @@ export default function QuestionPrompt({ question, onDismiss }: Props) {
                     disabled={submitting}
                     className={`w-full text-left px-3.5 py-2.5 rounded-xl text-sm transition-all flex items-start gap-2.5 ${
                       selected
-                        ? "bg-ember-subtle border border-ember/30 text-ember-light"
-                        : "bg-surface-200/50 border border-ghost-border text-text-primary hover:border-surface-500"
+                        ? "glass-card !bg-ember-subtle !border-ember/30 text-ember-light"
+                        : "glass-input text-text-primary hover:!border-ghost-border"
                     }`}
                   >
                     {/* Indicator */}
@@ -122,7 +122,7 @@ export default function QuestionPrompt({ question, onDismiss }: Props) {
                 }}
                 placeholder="Type your own answer..."
                 disabled={submitting}
-                className="w-full bg-surface-200/50 border border-ghost-border rounded-xl px-3.5 py-2.5 text-sm text-text-primary placeholder:text-text-faint outline-none focus:border-surface-500 transition-colors"
+                className="w-full glass-input px-3.5 py-2.5 text-sm text-text-primary placeholder:text-text-faint outline-none focus:border-ghost-border transition-colors"
               />
             )}
           </div>
@@ -133,7 +133,7 @@ export default function QuestionPrompt({ question, onDismiss }: Props) {
           <button
             onClick={handleReject}
             disabled={submitting}
-            className="px-4 py-1.5 text-xs text-text-muted hover:text-text-primary transition-colors disabled:opacity-50 rounded-full border border-transparent hover:border-ghost-border"
+            className="px-4 py-1.5 text-xs text-text-muted hover:text-text-primary transition-colors disabled:opacity-50 glass-btn !rounded-full"
           >
             Skip
           </button>

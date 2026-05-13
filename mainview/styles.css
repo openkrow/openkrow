@@ -5,7 +5,7 @@
   :root, :host {
     --font-sans: ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji",
       "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
-    --font-mono: "JetBrains Mono", monospace;
+    --font-mono: "JetBrains Mono", "SF Mono", monospace;
     --color-red-300: oklch(80.8% 0.114 19.571);
     --color-red-400: oklch(70.4% 0.191 22.216);
     --color-red-500: oklch(63.7% 0.237 25.331);
@@ -51,15 +51,14 @@
     --radius-2xl: 1rem;
     --animate-spin: spin 1s linear infinite;
     --animate-pulse: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
-    --blur-sm: 8px;
     --default-transition-duration: 150ms;
     --default-transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
     --default-font-family: var(--font-sans);
-    --default-mono-font-family: "JetBrains Mono", monospace;
+    --default-mono-font-family: "JetBrains Mono", "SF Mono", monospace;
     --color-ember-glow: #E5A41133;
     --color-ember-subtle: #E5A41118;
     --font-display: "Syne", sans-serif;
-    --font-body: "Geist Sans", "Geist", -apple-system, sans-serif;
+    --font-body: "Geist Sans", "Geist", -apple-system, BlinkMacSystemFont, sans-serif;
   }
 }
 @layer base {
@@ -568,6 +567,9 @@
   .\!rounded-2xl {
     border-radius: var(--radius-2xl) !important;
   }
+  .\!rounded-full {
+    border-radius: calc(infinity * 1px) !important;
+  }
   .\!rounded-lg {
     border-radius: var(--radius-lg) !important;
   }
@@ -612,9 +614,25 @@
     border-left-style: var(--tw-border-style);
     border-left-width: 2px;
   }
+  .\!border-dashed {
+    --tw-border-style: dashed !important;
+    border-style: dashed !important;
+  }
   .border-dashed {
     --tw-border-style: dashed;
     border-style: dashed;
+  }
+  .\!border-ember\/20 {
+    border-color: color-mix(in oklab, #E5A411 20%, transparent) !important;
+  }
+  .\!border-ember\/30 {
+    border-color: color-mix(in oklab, #E5A411 30%, transparent) !important;
+  }
+  .\!border-surface-400 {
+    border-color: var(--surface-400) !important;
+  }
+  .\!border-transparent {
+    border-color: transparent !important;
   }
   .border-ember {
     border-color: #E5A411;
@@ -646,9 +664,6 @@
   .border-neutral-800 {
     border-color: var(--color-neutral-800);
   }
-  .border-surface {
-    border-color: var(--surface-base);
-  }
   .border-surface-400 {
     border-color: var(--surface-400);
   }
@@ -660,6 +675,15 @@
   }
   .border-white {
     border-color: var(--color-white);
+  }
+  .\!bg-\[var\(--ghost-bg\)\] {
+    background-color: var(--ghost-bg) !important;
+  }
+  .\!bg-ember-subtle {
+    background-color: #E5A41118 !important;
+  }
+  .\!bg-ember\/\[0\.08\] {
+    background-color: color-mix(in oklab, #E5A411 8%, transparent) !important;
   }
   .bg-black\/60 {
     background-color: color-mix(in srgb, #000 60%, transparent);
@@ -688,14 +712,8 @@
   .bg-ember\/\[0\.04\] {
     background-color: color-mix(in oklab, #E5A411 4%, transparent);
   }
-  .bg-ember\/\[0\.12\] {
-    background-color: color-mix(in oklab, #E5A411 12%, transparent);
-  }
   .bg-emerald-400 {
     background-color: var(--color-emerald-400);
-  }
-  .bg-ghost {
-    background-color: var(--ghost-bg);
   }
   .bg-green-400 {
     background-color: var(--color-green-400);
@@ -742,15 +760,6 @@
   .bg-surface {
     background-color: var(--surface-base);
   }
-  .bg-surface-100 {
-    background-color: var(--surface-100);
-  }
-  .bg-surface-100\/50 {
-    background-color: var(--surface-100);
-    @supports (color: color-mix(in lab, red, red)) {
-      background-color: color-mix(in oklab, var(--surface-100) 50%, transparent);
-    }
-  }
   .bg-surface-100\/70 {
     background-color: var(--surface-100);
     @supports (color: color-mix(in lab, red, red)) {
@@ -759,24 +768,6 @@
   }
   .bg-surface-200 {
     background-color: var(--surface-200);
-  }
-  .bg-surface-200\/50 {
-    background-color: var(--surface-200);
-    @supports (color: color-mix(in lab, red, red)) {
-      background-color: color-mix(in oklab, var(--surface-200) 50%, transparent);
-    }
-  }
-  .bg-surface-200\/60 {
-    background-color: var(--surface-200);
-    @supports (color: color-mix(in lab, red, red)) {
-      background-color: color-mix(in oklab, var(--surface-200) 60%, transparent);
-    }
-  }
-  .bg-surface-200\/80 {
-    background-color: var(--surface-200);
-    @supports (color: color-mix(in lab, red, red)) {
-      background-color: color-mix(in oklab, var(--surface-200) 80%, transparent);
-    }
   }
   .bg-surface-500 {
     background-color: var(--surface-500);
@@ -887,7 +878,7 @@
     font-family: "Syne", sans-serif;
   }
   .font-mono {
-    font-family: "JetBrains Mono", monospace;
+    font-family: "JetBrains Mono", "SF Mono", monospace;
   }
   .text-2xl {
     font-size: var(--text-2xl);
@@ -1038,6 +1029,10 @@
   .opacity-50 {
     opacity: 50%;
   }
+  .\!shadow-none {
+    --tw-shadow: 0 0 #0000 !important;
+    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow) !important;
+  }
   .shadow-2xl {
     --tw-shadow: 0 25px 50px -12px var(--tw-shadow-color, rgb(0 0 0 / 0.25));
     box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
@@ -1062,11 +1057,6 @@
     --tw-blur: blur(120px);
     filter: var(--tw-blur,) var(--tw-brightness,) var(--tw-contrast,) var(--tw-grayscale,) var(--tw-hue-rotate,) var(--tw-invert,) var(--tw-saturate,) var(--tw-sepia,) var(--tw-drop-shadow,);
   }
-  .backdrop-blur-sm {
-    --tw-backdrop-blur: blur(var(--blur-sm));
-    -webkit-backdrop-filter: var(--tw-backdrop-blur,) var(--tw-backdrop-brightness,) var(--tw-backdrop-contrast,) var(--tw-backdrop-grayscale,) var(--tw-backdrop-hue-rotate,) var(--tw-backdrop-invert,) var(--tw-backdrop-opacity,) var(--tw-backdrop-saturate,) var(--tw-backdrop-sepia,);
-    backdrop-filter: var(--tw-backdrop-blur,) var(--tw-backdrop-brightness,) var(--tw-backdrop-contrast,) var(--tw-backdrop-grayscale,) var(--tw-backdrop-hue-rotate,) var(--tw-backdrop-invert,) var(--tw-backdrop-opacity,) var(--tw-backdrop-saturate,) var(--tw-backdrop-sepia,);
-  }
   .transition-all {
     transition-property: all;
     transition-timing-function: var(--tw-ease, var(--default-transition-timing-function));
@@ -1084,6 +1074,22 @@
     --tw-outline-style: none;
     outline-style: none;
   }
+  .selection\:bg-ember-subtle {
+    & *::selection {
+      background-color: #E5A41118;
+    }
+    &::selection {
+      background-color: #E5A41118;
+    }
+  }
+  .selection\:text-ember-light {
+    & *::selection {
+      color: #F0BE4A;
+    }
+    &::selection {
+      color: #F0BE4A;
+    }
+  }
   .placeholder\:text-neutral-500 {
     &::placeholder {
       color: var(--color-neutral-500);
@@ -1099,17 +1105,24 @@
       border-color: var(--surface-500);
     }
   }
-  .hover\:border-ember\/30 {
+  .hover\:\!border-\[var\(--ghost-border\)\] {
     &:hover {
       @media (hover: hover) {
-        border-color: color-mix(in oklab, #E5A411 30%, transparent);
+        border-color: var(--ghost-border) !important;
       }
     }
   }
-  .hover\:border-ghost-border {
+  .hover\:\!border-ember\/30 {
     &:hover {
       @media (hover: hover) {
-        border-color: var(--ghost-border);
+        border-color: color-mix(in oklab, #E5A411 30%, transparent) !important;
+      }
+    }
+  }
+  .hover\:\!border-ghost-border {
+    &:hover {
+      @media (hover: hover) {
+        border-color: var(--ghost-border) !important;
       }
     }
   }
@@ -1117,13 +1130,6 @@
     &:hover {
       @media (hover: hover) {
         border-color: var(--color-neutral-600);
-      }
-    }
-  }
-  .hover\:border-surface-500 {
-    &:hover {
-      @media (hover: hover) {
-        border-color: var(--surface-500);
       }
     }
   }
@@ -1254,6 +1260,11 @@
       }
     }
   }
+  .focus\:border-ghost-border {
+    &:focus {
+      border-color: var(--ghost-border);
+    }
+  }
   .focus\:border-neutral-500 {
     &:focus {
       border-color: var(--color-neutral-500);
@@ -1262,11 +1273,6 @@
   .focus\:border-neutral-600 {
     &:focus {
       border-color: var(--color-neutral-600);
-    }
-  }
-  .focus\:border-surface-500 {
-    &:focus {
-      border-color: var(--surface-500);
     }
   }
   .disabled\:cursor-not-allowed {
@@ -1302,44 +1308,56 @@
   }
 }
 :root {
-  --surface-base: #F5F0E8;
-  --surface-100: #EDE7DB;
-  --surface-200: #E0D8C8;
-  --surface-300: #D4C9B4;
-  --surface-400: #C4B89E;
+  --surface-base: #EFEAE2;
+  --surface-100: #E8E2D8;
+  --surface-200: #DDD6C8;
+  --surface-300: #D0C7B5;
+  --surface-400: #BFB5A0;
   --surface-500: #8A8274;
   --text-primary: #1A1712;
   --text-muted: #5C5549;
   --text-faint: #8A8274;
-  --ghost-bg: #ffffff60;
-  --ghost-hover: #ffffff80;
-  --ghost-border: #1A17120C;
+  --ghost-bg: rgba(255, 255, 255, 0.45);
+  --ghost-hover: rgba(255, 255, 255, 0.6);
+  --ghost-border: rgba(255, 255, 255, 0.5);
+  --ghost-border-subtle: rgba(0, 0, 0, 0.06);
+  --glass-highlight: rgba(255, 255, 255, 0.7);
+  --glass-shadow: rgba(0, 0, 0, 0.08);
+  --glass-inner-glow: rgba(255, 255, 255, 0.15);
+  --glass-blur: 24px;
+  --glass-saturation: 1.4;
   --accent: #E5A411;
   --accent-text: #C48D0E;
-  --noise-opacity: 0.022;
-  --code-bg: #E0D8C8;
-  --scrollbar-thumb: #D4C9B4;
-  --scrollbar-hover: #C4B89E;
+  --noise-opacity: 0.015;
+  --code-bg: rgba(0, 0, 0, 0.04);
+  --scrollbar-thumb: rgba(0, 0, 0, 0.12);
+  --scrollbar-hover: rgba(0, 0, 0, 0.2);
 }
 .dark {
-  --surface-base: #08080C;
-  --surface-100: #0E0E14;
-  --surface-200: #15151F;
-  --surface-300: #1C1C2A;
+  --surface-base: #0A0A10;
+  --surface-100: #101018;
+  --surface-200: #16161F;
+  --surface-300: #1E1E2A;
   --surface-400: #2A2A3D;
   --surface-500: #3D3D55;
-  --text-primary: #C8C2B6;
-  --text-muted: #6B6578;
-  --text-faint: #3D3D55;
-  --ghost-bg: #ffffff08;
-  --ghost-hover: #ffffff0D;
-  --ghost-border: #ffffff10;
+  --text-primary: #D4CFC6;
+  --text-muted: #7A7488;
+  --text-faint: #44445A;
+  --ghost-bg: rgba(255, 255, 255, 0.05);
+  --ghost-hover: rgba(255, 255, 255, 0.09);
+  --ghost-border: rgba(255, 255, 255, 0.08);
+  --ghost-border-subtle: rgba(255, 255, 255, 0.04);
+  --glass-highlight: rgba(255, 255, 255, 0.08);
+  --glass-shadow: rgba(0, 0, 0, 0.4);
+  --glass-inner-glow: rgba(255, 255, 255, 0.04);
+  --glass-blur: 28px;
+  --glass-saturation: 1.6;
   --accent: #F0BE4A;
   --accent-text: #F0BE4A;
-  --noise-opacity: 0.035;
-  --code-bg: #0E0E14;
-  --scrollbar-thumb: #2A2A3D;
-  --scrollbar-hover: #3D3D55;
+  --noise-opacity: 0.025;
+  --code-bg: rgba(255, 255, 255, 0.03);
+  --scrollbar-thumb: rgba(255, 255, 255, 0.08);
+  --scrollbar-hover: rgba(255, 255, 255, 0.14);
 }
 body {
   font-family: var(--font-body);
@@ -1358,14 +1376,14 @@ body::before {
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='1'/%3E%3C/svg%3E");
 }
 ::-webkit-scrollbar {
-  width: 6px;
+  width: 5px;
 }
 ::-webkit-scrollbar-track {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
   background: var(--scrollbar-thumb);
-  border-radius: 3px;
+  border-radius: 4px;
 }
 ::-webkit-scrollbar-thumb:hover {
   background: var(--scrollbar-hover);
@@ -1379,13 +1397,61 @@ body::before {
 .glass-card {
   background: var(--ghost-bg);
   border: 1px solid var(--ghost-border);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturation));
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturation));
   border-radius: 16px;
-  transition: border-color 0.3s ease, transform 0.2s ease;
+  box-shadow: 0 0 0 0.5px var(--ghost-border-subtle), 0 2px 8px -2px var(--glass-shadow), 0 8px 24px -4px var(--glass-shadow), inset 0 1px 0 var(--glass-inner-glow);
+  transition: border-color 0.3s ease, box-shadow 0.3s ease, transform 0.2s ease;
 }
 .glass-card:hover {
   border-color: var(--ghost-hover);
+  box-shadow: 0 0 0 0.5px var(--ghost-border-subtle), 0 4px 12px -2px var(--glass-shadow), 0 12px 32px -4px var(--glass-shadow), inset 0 1px 0 var(--glass-inner-glow);
+}
+.glass-elevated {
+  background: var(--ghost-bg);
+  border: 1px solid var(--ghost-border);
+  backdrop-filter: blur(40px) saturate(1.8);
+  -webkit-backdrop-filter: blur(40px) saturate(1.8);
+  border-radius: 16px;
+  box-shadow: 0 0 0 0.5px var(--ghost-border-subtle), 0 8px 32px -4px var(--glass-shadow), 0 24px 64px -8px var(--glass-shadow), inset 0 1px 0 var(--glass-highlight);
+}
+.glass-input {
+  background: var(--ghost-bg);
+  border: 1px solid var(--ghost-border-subtle);
+  backdrop-filter: blur(12px) saturate(1.2);
+  -webkit-backdrop-filter: blur(12px) saturate(1.2);
+  border-radius: 12px;
+  box-shadow: inset 0 1px 2px var(--glass-shadow);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+.glass-input:focus {
+  border-color: var(--ghost-border);
+  box-shadow: inset 0 1px 2px var(--glass-shadow), 0 0 0 3px rgba(229, 164, 17, 0.08);
+}
+.glass-btn {
+  background: var(--ghost-bg);
+  border: 1px solid var(--ghost-border);
+  backdrop-filter: blur(16px) saturate(1.3);
+  -webkit-backdrop-filter: blur(16px) saturate(1.3);
+  border-radius: 10px;
+  box-shadow: 0 1px 3px var(--glass-shadow), inset 0 1px 0 var(--glass-inner-glow);
+  transition: all 0.2s ease;
+}
+.glass-btn:hover {
+  background: var(--ghost-hover);
+  border-color: var(--ghost-hover);
+  box-shadow: 0 2px 8px var(--glass-shadow), inset 0 1px 0 var(--glass-inner-glow);
+  transform: translateY(-0.5px);
+}
+.glass-btn:active {
+  transform: translateY(0);
+  box-shadow: 0 1px 2px var(--glass-shadow), inset 0 1px 3px var(--glass-shadow);
+}
+.glass-toolbar {
+  background: var(--ghost-bg);
+  border-bottom: 1px solid var(--ghost-border-subtle);
+  backdrop-filter: blur(32px) saturate(var(--glass-saturation));
+  -webkit-backdrop-filter: blur(32px) saturate(var(--glass-saturation));
 }
 .ember-text {
   color: var(--accent-text);
@@ -1406,7 +1472,7 @@ body::before {
   background: var(--surface-300);
 }
 .border-surface {
-  border-color: var(--ghost-border);
+  border-color: var(--ghost-border-subtle);
 }
 .text-primary {
   color: var(--text-primary);
@@ -1423,8 +1489,8 @@ body::before {
 @keyframes reveal-up {
   from {
     opacity: 0;
-    transform: translateY(12px) scale(0.98);
-    filter: blur(4px);
+    transform: translateY(16px) scale(0.96);
+    filter: blur(8px);
   }
   to {
     opacity: 1;
@@ -1454,6 +1520,22 @@ body::before {
   }
   50% {
     opacity: 0.8;
+  }
+}
+@keyframes liquid-shimmer {
+  0% {
+    background-position: -200% center;
+  }
+  100% {
+    background-position: 200% center;
+  }
+}
+@keyframes glass-breathe {
+  0%, 100% {
+    box-shadow: 0 0 0 0.5px var(--ghost-border-subtle), 0 2px 8px -2px var(--glass-shadow), 0 8px 24px -4px var(--glass-shadow), inset 0 1px 0 var(--glass-inner-glow);
+  }
+  50% {
+    box-shadow: 0 0 0 0.5px var(--ghost-border), 0 4px 16px -2px var(--glass-shadow), 0 12px 32px -4px var(--glass-shadow), inset 0 1px 0 var(--glass-highlight);
   }
 }
 @keyframes braille-dissolve {
@@ -1587,21 +1669,24 @@ body::before {
   }
 }
 .animate-reveal {
-  animation: reveal-up 0.9s cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation: reveal-up 0.8s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 .animate-fade {
-  animation: fade-in 1.2s ease both;
+  animation: fade-in 1s ease both;
 }
 .animate-float {
   animation: float 6s ease-in-out infinite;
 }
 .animate-shimmer {
-  background: linear-gradient(90deg, transparent, var(--color-ember-subtle), transparent);
+  background: linear-gradient(90deg, transparent, var(--glass-inner-glow), transparent);
   background-size: 200% 100%;
-  animation: shimmer 3s ease-in-out infinite;
+  animation: liquid-shimmer 3s ease-in-out infinite;
 }
 .animate-cursor {
   animation: typing-cursor 1s ease-in-out infinite;
+}
+.animate-breathe {
+  animation: glass-breathe 4s ease-in-out infinite;
 }
 .delay-1 {
   animation-delay: 0.1s;
@@ -1777,42 +1862,6 @@ body::before {
   syntax: "*";
   inherits: false;
 }
-@property --tw-backdrop-blur {
-  syntax: "*";
-  inherits: false;
-}
-@property --tw-backdrop-brightness {
-  syntax: "*";
-  inherits: false;
-}
-@property --tw-backdrop-contrast {
-  syntax: "*";
-  inherits: false;
-}
-@property --tw-backdrop-grayscale {
-  syntax: "*";
-  inherits: false;
-}
-@property --tw-backdrop-hue-rotate {
-  syntax: "*";
-  inherits: false;
-}
-@property --tw-backdrop-invert {
-  syntax: "*";
-  inherits: false;
-}
-@property --tw-backdrop-opacity {
-  syntax: "*";
-  inherits: false;
-}
-@property --tw-backdrop-saturate {
-  syntax: "*";
-  inherits: false;
-}
-@property --tw-backdrop-sepia {
-  syntax: "*";
-  inherits: false;
-}
 @keyframes spin {
   to {
     transform: rotate(360deg);
@@ -1861,15 +1910,6 @@ body::before {
       --tw-drop-shadow-color: initial;
       --tw-drop-shadow-alpha: 100%;
       --tw-drop-shadow-size: initial;
-      --tw-backdrop-blur: initial;
-      --tw-backdrop-brightness: initial;
-      --tw-backdrop-contrast: initial;
-      --tw-backdrop-grayscale: initial;
-      --tw-backdrop-hue-rotate: initial;
-      --tw-backdrop-invert: initial;
-      --tw-backdrop-opacity: initial;
-      --tw-backdrop-saturate: initial;
-      --tw-backdrop-sepia: initial;
     }
   }
 }

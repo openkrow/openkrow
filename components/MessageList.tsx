@@ -32,7 +32,7 @@ function ToolPartView({ part }: { part: ToolPart }) {
   );
 
   return (
-    <div className="my-1.5 px-3 py-2 rounded-xl bg-surface-200/80 border border-ghost-border font-mono text-[11px]">
+    <div className="my-1.5 px-3 py-2 rounded-xl glass-input font-mono text-[11px]">
       <div className="flex items-center gap-2">
         <span className={statusColor}>{statusIcon}</span>
         <span className="text-text-primary">{title}</span>
@@ -59,7 +59,7 @@ function ReasoningView({ part }: { part: ReasoningPart }) {
   return (
     <details className="my-1.5">
       <summary className="text-text-muted text-[11px] cursor-pointer hover:text-text-primary transition-colors font-mono uppercase tracking-wider">Thinking...</summary>
-      <div className="px-3 py-2 mt-1 text-[11px] text-text-muted italic whitespace-pre-wrap leading-relaxed rounded-lg bg-surface-100/50">{part.text}</div>
+      <div className="px-3 py-2 mt-1 text-[11px] text-text-muted italic whitespace-pre-wrap leading-relaxed rounded-lg glass-input">{part.text}</div>
     </details>
   );
 }
@@ -69,9 +69,9 @@ function MarkdownContent({ text }: { text: string }) {
     <Markdown
       remarkPlugins={[remarkGfm]}
       components={{
-        pre: ({ children }) => (
-          <pre className="bg-surface-100 border border-ghost-border rounded-xl p-3 overflow-x-auto my-2.5 text-[12px] font-mono leading-relaxed">{children}</pre>
-        ),
+          pre: ({ children }) => (
+            <pre className="glass-input !rounded-xl p-3 overflow-x-auto my-2.5 text-[12px] font-mono leading-relaxed">{children}</pre>
+          ),
         code: ({ className, children, ...props }) => {
           const isBlock = className?.startsWith("language-");
           if (isBlock) {
@@ -138,7 +138,7 @@ export default function MessageList({ messages, sending }: Props) {
     <div className="flex-1 overflow-y-auto px-4 py-5 space-y-4">
       {messages.length === 0 && (
         <div className="flex flex-col items-center justify-center h-full gap-3">
-          <div className="w-10 h-10 rounded-xl bg-ghost border border-ghost-border flex items-center justify-center">
+          <div className="w-10 h-10 rounded-xl glass-card flex items-center justify-center animate-breathe">
             <span className="font-display text-base font-bold text-text-muted">K</span>
           </div>
           <p className="text-text-faint text-sm font-mono text-center">OpenKrow is an AI agent that sits right on your desktop. Ask it to draft reports, research topics, summarize documents, or write code — in natural language. It works alongside you, not in another browser tab.</p>
@@ -149,8 +149,8 @@ export default function MessageList({ messages, sending }: Props) {
           <div
             className={`max-w-[85%] rounded-2xl px-4 py-3 text-sm ${
               msg.role === "user"
-                ? "bg-ember/[0.12] border border-ember/20 text-text-primary"
-                : "bg-surface-200/60 border border-ghost-border text-text-primary"
+                ? "glass-card !bg-ember/[0.08] !border-ember/20 text-text-primary"
+                : "glass-card !bg-[var(--ghost-bg)] text-text-primary"
             }`}
           >
             {msg.role === "assistant" && msg.parts && msg.parts.length > 0 ? (
@@ -165,7 +165,7 @@ export default function MessageList({ messages, sending }: Props) {
       ))}
       {sending && messages[messages.length - 1]?.role !== "assistant" && (
         <div className="flex justify-start">
-          <div className="bg-surface-200/60 border border-ghost-border text-text-muted rounded-2xl px-4 py-3 text-sm">
+          <div className="glass-card !bg-[var(--ghost-bg)] text-text-muted rounded-2xl px-4 py-3 text-sm">
             <div className="flex items-center gap-2">
               <div className="flex gap-1">
                 <span className="w-1.5 h-1.5 rounded-full bg-ember/60 animate-pulse" style={{ animationDelay: "0s" }} />

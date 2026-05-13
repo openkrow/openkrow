@@ -257,11 +257,11 @@ export default function App() {
 
       {/* Header */}
       <div
-        className="flex items-center justify-between px-4 py-2.5 border-b border-surface shrink-0 backdrop-blur-sm relative z-10"
+        className="flex items-center justify-between px-4 py-2.5 glass-toolbar shrink-0 relative z-10"
         style={{ paddingTop: "1.75rem", WebkitAppRegion: "drag" } as any}
       >
         <div className="flex items-center gap-2.5" style={{ WebkitAppRegion: "no-drag" } as any}>
-          <div className="relative w-7 h-7 rounded-lg glass-card flex items-center justify-center !rounded-lg">
+          <div className="relative w-7 h-7 rounded-lg glass-btn flex items-center justify-center !rounded-lg">
             <span className="font-display text-xs font-bold text-primary">K</span>
             <div className="absolute -top-px -right-px w-1.5 h-1.5 rounded-full bg-ember" />
           </div>
@@ -272,7 +272,7 @@ export default function App() {
           <ThemeToggle />
           <button
             onClick={() => setShowHistory(!showHistory)}
-            className="p-1.5 rounded-lg hover:bg-[var(--ghost-hover)] transition-colors text-[var(--text-muted)] hover:text-[var(--text-primary)]"
+            className="p-1.5 rounded-lg glass-btn !shadow-none !border-transparent hover:!border-[var(--ghost-border)] transition-all text-[var(--text-muted)] hover:text-[var(--text-primary)]"
             title="Chat history"
           >
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
@@ -281,7 +281,7 @@ export default function App() {
           </button>
           <button
             onClick={() => rpc.request.openSettings({})}
-            className="p-1.5 rounded-lg hover:bg-[var(--ghost-hover)] transition-colors text-[var(--text-muted)] hover:text-[var(--text-primary)]"
+            className="p-1.5 rounded-lg glass-btn !shadow-none !border-transparent hover:!border-[var(--ghost-border)] transition-all text-[var(--text-muted)] hover:text-[var(--text-primary)]"
             title="Settings"
           >
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
@@ -291,7 +291,7 @@ export default function App() {
           </button>
           <button
             onClick={handleNewSession}
-            className="p-1.5 rounded-lg hover:bg-[var(--ghost-hover)] transition-colors text-[var(--text-muted)] hover:text-[var(--text-primary)]"
+            className="p-1.5 rounded-lg glass-btn !shadow-none !border-transparent hover:!border-[var(--ghost-border)] transition-all text-[var(--text-muted)] hover:text-[var(--text-primary)]"
             title="New chat"
           >
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
