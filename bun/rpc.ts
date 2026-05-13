@@ -1,4 +1,4 @@
-import { BrowserView } from "electrobun/bun";
+import { BrowserView, Utils } from "electrobun/bun";
 import type { KrowRPCSchema, Theme } from "../shared/types";
 import { WorkspaceManager } from "./workspace";
 import { ensureOpencode } from "./opencode-installer";
@@ -143,7 +143,16 @@ export function createRpcHandler(
 
         startProviderOAuth: async ({ providerID, methodIndex, inputs }) => {
           try {
-            return await workspace.startProviderOAuth(providerID, methodIndex, inputs);
+            const result = await workspace.startProviderOAuth(providerID, methodIndex, inputs);
+            return { ...result, opened: result.url ? Utils.openExternal(result.url) : false };
+          } catch (err: any) {
+            return { error: err?.message ?? String(err) };
+          }
+        },
+
+        openExternalUrl: async ({ url }) => {
+          try {
+            return { success: Utils.openExternal(url) };
           } catch (err: any) {
             return { error: err?.message ?? String(err) };
           }

@@ -116,6 +116,13 @@ export type ProviderAuthMethod = {
   prompts?: ProviderAuthPrompt[];
 };
 
+export type ProviderOAuthStart = {
+  url: string;
+  method: "auto" | "code";
+  instructions: string;
+  opened?: boolean;
+};
+
 export type ProviderAuthData =
   | { type: "api"; key: string; metadata?: Record<string, string> }
   | { type: "oauth"; refresh: string; access: string; expires: number }
@@ -165,10 +172,14 @@ export type SettingsRPCSchema = {
       };
       startProviderOAuth: {
         params: { providerID: string; methodIndex: number; inputs?: Record<string, string> };
-        response: { url: string; method: string; instructions: string } | { error: string };
+        response: ProviderOAuthStart | { error: string };
+      };
+      openExternalUrl: {
+        params: { url: string };
+        response: { success: boolean } | { error: string };
       };
       completeProviderOAuth: {
-        params: { providerID: string; methodIndex: number; code: string };
+        params: { providerID: string; methodIndex: number; code?: string };
         response: { success: boolean } | { error: string };
       };
       removeProviderAuth: {
@@ -264,10 +275,14 @@ export type KrowRPCSchema = {
       };
       startProviderOAuth: {
         params: { providerID: string; methodIndex: number; inputs?: Record<string, string> };
-        response: { url: string; method: string; instructions: string } | { error: string };
+        response: ProviderOAuthStart | { error: string };
+      };
+      openExternalUrl: {
+        params: { url: string };
+        response: { success: boolean } | { error: string };
       };
       completeProviderOAuth: {
-        params: { providerID: string; methodIndex: number; code: string };
+        params: { providerID: string; methodIndex: number; code?: string };
         response: { success: boolean } | { error: string };
       };
       removeProviderAuth: {
