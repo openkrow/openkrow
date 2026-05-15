@@ -2,6 +2,7 @@ import { useRef, useEffect } from "react";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import type { ChatMessage, MessagePart, ToolPart, ReasoningPart } from "../shared/types";
+import { KrowLogo } from "./KrowLogo";
 
 type Props = {
   messages: ChatMessage[];
@@ -12,7 +13,7 @@ function ToolPartView({ part }: { part: ToolPart }) {
   const { tool, state } = part;
   const title = ("title" in state && state.title) ? state.title : tool;
 
-  const statusColor = state.status === "error" ? "text-red-400" : state.status === "completed" ? "text-emerald-400" : "text-ember-light";
+  const statusColor = state.status === "error" ? "text-red-400" : state.status === "completed" ? "text-emerald-400" : "text-[#fb923c]";
   const statusIcon = state.status === "completed" ? (
     <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
       <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
@@ -32,7 +33,7 @@ function ToolPartView({ part }: { part: ToolPart }) {
   );
 
   return (
-    <div className="my-1.5 px-3 py-2 rounded-xl glass-input font-mono text-[11px]">
+    <div className="my-1.5 px-3 py-2 glass-input font-mono text-[11px]">
       <div className="flex items-center gap-2">
         <span className={statusColor}>{statusIcon}</span>
         <span className="text-text-primary">{title}</span>
@@ -59,7 +60,7 @@ function ReasoningView({ part }: { part: ReasoningPart }) {
   return (
     <details className="my-1.5">
       <summary className="text-text-muted text-[11px] cursor-pointer hover:text-text-primary transition-colors font-mono uppercase tracking-wider">Thinking...</summary>
-      <div className="px-3 py-2 mt-1 text-[11px] text-text-muted italic whitespace-pre-wrap leading-relaxed rounded-lg glass-input">{part.text}</div>
+      <div className="px-3 py-2 mt-1 text-[11px] text-text-muted italic whitespace-pre-wrap leading-relaxed glass-input">{part.text}</div>
     </details>
   );
 }
@@ -70,17 +71,17 @@ function MarkdownContent({ text }: { text: string }) {
       remarkPlugins={[remarkGfm]}
       components={{
           pre: ({ children }) => (
-            <pre className="glass-input !rounded-xl p-3 overflow-x-auto my-2.5 text-[12px] font-mono leading-relaxed">{children}</pre>
+            <pre className="glass-input p-3 overflow-x-auto my-2.5 text-[12px] font-mono leading-relaxed">{children}</pre>
           ),
         code: ({ className, children, ...props }) => {
           const isBlock = className?.startsWith("language-");
           if (isBlock) {
             return <code className={`${className} text-[12px]`} {...props}>{children}</code>;
           }
-          return <code className="bg-surface-200 px-1.5 py-0.5 rounded-md text-[12px] font-mono text-ember-light" {...props}>{children}</code>;
+          return <code className="bg-surface-200 px-1.5 py-0.5 text-[12px] font-mono text-[#fb923c]" {...props}>{children}</code>;
         },
         a: ({ children, href }) => (
-          <a href={href} className="text-ember-light underline decoration-ember/30 hover:decoration-ember transition-colors" target="_blank" rel="noreferrer">{children}</a>
+          <a href={href} className="text-[#fb923c] underline decoration-[#fb923c]/30 hover:decoration-[#fb923c] transition-colors" target="_blank" rel="noreferrer">{children}</a>
         ),
         ul: ({ children }) => <ul className="list-disc pl-5 my-1.5 space-y-0.5">{children}</ul>,
         ol: ({ children }) => <ol className="list-decimal pl-5 my-1.5 space-y-0.5">{children}</ol>,
@@ -91,7 +92,7 @@ function MarkdownContent({ text }: { text: string }) {
         table: ({ children }) => <table className="border-collapse my-2.5 text-[12px] w-full">{children}</table>,
         th: ({ children }) => <th className="border border-surface-400 px-2.5 py-1.5 bg-surface-200 font-mono text-[11px] uppercase tracking-wider text-text-muted">{children}</th>,
         td: ({ children }) => <td className="border border-surface-400 px-2.5 py-1.5">{children}</td>,
-        blockquote: ({ children }) => <blockquote className="border-l-2 border-ember/40 pl-3 my-2 text-text-muted italic">{children}</blockquote>,
+        blockquote: ({ children }) => <blockquote className="border-l-2 border-[#fb923c]/40 pl-3 my-2 text-text-muted italic">{children}</blockquote>,
       }}
     >
       {text}
@@ -111,7 +112,7 @@ function PartsView({ parts }: { parts: MessagePart[] }) {
           case "tool":
             return <ToolPartView key={part.id} part={part} />;
           case "step-start":
-            return <div key={part.id} className="border-t border-ghost-border my-3" />;
+            return <div key={part.id} className="border-t border-[var(--border-color)] my-3" />;
           case "step-finish":
             return (
               <div key={part.id} className="font-mono text-[10px] text-text-faint mt-1">
@@ -138,19 +139,19 @@ export default function MessageList({ messages, sending }: Props) {
     <div className="flex-1 overflow-y-auto px-4 py-5 space-y-4">
       {messages.length === 0 && (
         <div className="flex flex-col items-center justify-center h-full gap-3">
-          <div className="w-10 h-10 rounded-xl glass-card flex items-center justify-center animate-breathe">
-            <span className="font-display text-base font-bold text-text-muted">K</span>
+          <div className="w-10 h-10 glass-card flex items-center justify-center animate-breathe">
+            <KrowLogo className="w-6 h-6 text-text-primary" />
           </div>
-          <p className="text-text-faint text-sm font-mono text-center">OpenKrow is an AI agent that sits right on your desktop. Ask it to draft reports, research topics, summarize documents, or write code — in natural language. It works alongside you, not in another browser tab.</p>
+          <p className="text-text-faint text-sm font-mono text-center max-w-md">OpenKrow is an AI agent that sits right on your desktop. Ask it to draft reports, research topics, summarize documents, or write code — in natural language.</p>
         </div>
       )}
       {messages.map((msg) => (
         <div key={msg.id} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
           <div
-            className={`max-w-[85%] rounded-2xl px-4 py-3 text-sm ${
+            className={`max-w-[85%] px-4 py-3 text-sm ${
               msg.role === "user"
-                ? "glass-card !bg-ember/[0.08] !border-ember/20 text-text-primary"
-                : "glass-card !bg-[var(--ghost-bg)] text-text-primary"
+                ? "glass-card border-[#fb923c]/30 bg-[#fb923c]/[0.06] text-text-primary"
+                : "glass-card text-text-primary"
             }`}
           >
             {msg.role === "assistant" && msg.parts && msg.parts.length > 0 ? (
@@ -165,12 +166,12 @@ export default function MessageList({ messages, sending }: Props) {
       ))}
       {sending && messages[messages.length - 1]?.role !== "assistant" && (
         <div className="flex justify-start">
-          <div className="glass-card !bg-[var(--ghost-bg)] text-text-muted rounded-2xl px-4 py-3 text-sm">
+          <div className="glass-card text-text-muted px-4 py-3 text-sm">
             <div className="flex items-center gap-2">
               <div className="flex gap-1">
-                <span className="w-1.5 h-1.5 rounded-full bg-ember/60 animate-pulse" style={{ animationDelay: "0s" }} />
-                <span className="w-1.5 h-1.5 rounded-full bg-ember/60 animate-pulse" style={{ animationDelay: "0.15s" }} />
-                <span className="w-1.5 h-1.5 rounded-full bg-ember/60 animate-pulse" style={{ animationDelay: "0.3s" }} />
+                <span className="w-1.5 h-1.5 bg-[#fb923c]/60 animate-pulse" style={{ animationDelay: "0s" }} />
+                <span className="w-1.5 h-1.5 bg-[#fb923c]/60 animate-pulse" style={{ animationDelay: "0.15s" }} />
+                <span className="w-1.5 h-1.5 bg-[#fb923c]/60 animate-pulse" style={{ animationDelay: "0.3s" }} />
               </div>
               <span className="font-mono text-[11px] text-text-muted">Thinking...</span>
             </div>

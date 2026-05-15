@@ -10,7 +10,7 @@ export default function ThemeToggle() {
   return (
     <button
       onClick={toggle}
-      className="p-1.5 rounded-lg hover:bg-[var(--ghost-hover)] transition-colors text-[var(--text-muted)] hover:text-[var(--text-primary)]"
+      className="p-1.5 glass-btn text-[var(--text-muted)] hover:text-[#fb923c] hover:border-[#fb923c]"
       title={`Switch to ${resolved === "dark" ? "light" : "dark"} mode`}
     >
       {resolved === "dark" ? (

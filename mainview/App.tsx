@@ -6,6 +6,7 @@ import ChatInput from "../components/ChatInput";
 import SessionHistory from "../components/SessionHistory";
 import QuestionPrompt from "../components/QuestionPrompt";
 import ThemeToggle from "../components/ThemeToggle";
+import { KrowLogo } from "../components/KrowLogo";
 
 
 type AppState = "loading" | "ready" | "error";
@@ -215,25 +216,22 @@ export default function App() {
   // ─── Loading / Error Screen ───
   if (state !== "ready") {
     return (
-      <div className="flex flex-col items-center justify-center h-screen bg-surface">
-        {/* Atmospheric glow */}
-        <div className="absolute inset-0 overflow-hidden pointer-events-none">
-          <div className="absolute top-1/3 left-1/2 -translate-x-1/2 w-[300px] h-[300px] rounded-full bg-ember/[0.04] blur-[120px]" />
-        </div>
-
-        <div className="relative z-10 flex flex-col items-center gap-6 animate-reveal">
+      <div className="flex flex-col items-center justify-center h-screen bg-surface relative z-10">
+        <div className="flex flex-col items-center gap-6 animate-reveal">
           {/* Logo mark */}
-          <div className="relative">
-            <div className="w-14 h-14 rounded-2xl glass-card flex items-center justify-center">
-              <img src="views://mainview/logo.png" alt="Krow" className="w-10 h-10 rounded-lg" />
-            </div>
+          <div className="w-14 h-14 glass-card flex items-center justify-center">
+            <KrowLogo className="w-9 h-9 text-text-primary" />
           </div>
 
-          <h1 className="font-display text-xl font-semibold text-primary tracking-tight">Krow</h1>
+          <div className="flex items-center gap-2">
+            <h1 className="font-display text-xl font-bold text-primary tracking-tight">
+              Open<span className="text-[#fb923c]">Krow</span>
+            </h1>
+          </div>
 
           {state === "loading" && (
             <div className="flex flex-col items-center gap-3 animate-fade delay-2">
-              <span className="font-mono text-[13px] text-accent tracking-wider animate-braille" />
+              <span className="font-mono text-[13px] text-[#fb923c] tracking-wider animate-braille" />
               <p className="font-mono text-[11px] text-muted tracking-wide">{loadingMessage}</p>
             </div>
           )}
@@ -251,26 +249,23 @@ export default function App() {
   // ─── Main Chat UI ───
   return (
     <div className="flex flex-col h-screen bg-surface relative">
-      {/* Subtle top atmospheric glow */}
-      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[400px] h-[200px] bg-ember/[0.02] blur-[100px] pointer-events-none" />
-
       {/* Header */}
       <div
         className="flex items-center justify-between px-4 py-2.5 glass-toolbar shrink-0 relative z-10"
         style={{ paddingTop: "1.75rem", WebkitAppRegion: "drag" } as any}
       >
         <div className="flex items-center gap-2.5" style={{ WebkitAppRegion: "no-drag" } as any}>
-          <div className="relative w-7 h-7 rounded-lg glass-btn flex items-center justify-center !rounded-lg">
-            <img src="views://mainview/logo.png" alt="Krow" className="w-5 h-5 rounded" />
-          </div>
-          <h1 className="font-display text-sm font-semibold text-primary tracking-tight">Krow</h1>
+          <KrowLogo className="w-6 h-6 text-text-primary" />
+          <h1 className="font-display text-sm font-bold text-primary tracking-tight">
+            Open<span className="text-[#fb923c]">Krow</span>
+          </h1>
         </div>
 
         <div className="flex items-center gap-0.5" style={{ WebkitAppRegion: "no-drag" } as any}>
           <ThemeToggle />
           <button
             onClick={() => setShowHistory(!showHistory)}
-            className="p-1.5 rounded-lg glass-btn !shadow-none !border-transparent hover:!border-[var(--ghost-border)] transition-all text-[var(--text-muted)] hover:text-[var(--text-primary)]"
+            className="p-1.5 glass-btn text-[var(--text-muted)] hover:text-[#fb923c] hover:border-[#fb923c]"
             title="Chat history"
           >
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
@@ -279,7 +274,7 @@ export default function App() {
           </button>
           <button
             onClick={() => rpc.request.openSettings({})}
-            className="p-1.5 rounded-lg glass-btn !shadow-none !border-transparent hover:!border-[var(--ghost-border)] transition-all text-[var(--text-muted)] hover:text-[var(--text-primary)]"
+            className="p-1.5 glass-btn text-[var(--text-muted)] hover:text-[#fb923c] hover:border-[#fb923c]"
             title="Settings"
           >
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
@@ -289,7 +284,7 @@ export default function App() {
           </button>
           <button
             onClick={handleNewSession}
-            className="p-1.5 rounded-lg glass-btn !shadow-none !border-transparent hover:!border-[var(--ghost-border)] transition-all text-[var(--text-muted)] hover:text-[var(--text-primary)]"
+            className="p-1.5 glass-btn text-[var(--text-muted)] hover:text-[#fb923c] hover:border-[#fb923c]"
             title="New chat"
           >
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>

@@ -56,7 +56,7 @@ export default function QuestionPrompt({ question, onDismiss }: Props) {
         {question.questions.map((q, qIdx) => (
           <div key={qIdx} className="px-5 py-4 space-y-3">
             {/* Header */}
-            <div className="font-mono text-[11px] uppercase tracking-[0.2em] text-ember-light">
+            <div className="font-mono text-[11px] uppercase tracking-[0.2em] text-[#fb923c]">
               {q.header}
             </div>
             {/* Question */}
@@ -71,29 +71,29 @@ export default function QuestionPrompt({ question, onDismiss }: Props) {
                     key={opt.label}
                     onClick={() => toggleOption(qIdx, opt.label, !!q.multiple)}
                     disabled={submitting}
-                    className={`w-full text-left px-3.5 py-2.5 rounded-xl text-sm transition-all flex items-start gap-2.5 ${
+                    className={`w-full text-left px-3.5 py-2.5 text-sm transition-all flex items-start gap-2.5 ${
                       selected
-                        ? "glass-card !bg-ember-subtle !border-ember/30 text-ember-light"
-                        : "glass-input text-text-primary hover:!border-ghost-border"
+                        ? "glass-card border-[#fb923c]/30 bg-[#fb923c]/10 text-[#fb923c]"
+                        : "glass-input text-text-primary hover:border-[var(--surface-500)]"
                     }`}
                   >
                     {/* Indicator */}
                     <span className="mt-0.5 shrink-0">
                       {q.multiple ? (
-                        <span className={`inline-flex items-center justify-center w-4 h-4 rounded-md border ${
-                          selected ? "bg-ember border-ember" : "border-surface-500"
+                        <span className={`inline-flex items-center justify-center w-4 h-4 border ${
+                          selected ? "bg-[#fb923c] border-[#fb923c]" : "border-surface-500"
                         }`}>
                           {selected && (
-                            <svg className="w-2.5 h-2.5 text-obsidian" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                            <svg className="w-2.5 h-2.5 text-[#0F172A]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
                               <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
                             </svg>
                           )}
                         </span>
                       ) : (
-                        <span className={`inline-flex items-center justify-center w-4 h-4 rounded-full border ${
-                          selected ? "border-ember" : "border-surface-500"
+                        <span className={`inline-flex items-center justify-center w-4 h-4 border ${
+                          selected ? "border-[#fb923c]" : "border-surface-500"
                         }`}>
-                          {selected && <span className="w-2 h-2 rounded-full bg-ember" />}
+                          {selected && <span className="w-2 h-2 bg-[#fb923c]" />}
                         </span>
                       )}
                     </span>
@@ -122,25 +122,25 @@ export default function QuestionPrompt({ question, onDismiss }: Props) {
                 }}
                 placeholder="Type your own answer..."
                 disabled={submitting}
-                className="w-full glass-input px-3.5 py-2.5 text-sm text-text-primary placeholder:text-text-faint outline-none focus:border-ghost-border transition-colors"
+                className="w-full glass-input px-3.5 py-2.5 text-sm text-text-primary placeholder:text-text-faint outline-none focus:border-[#fb923c] transition-colors"
               />
             )}
           </div>
         ))}
 
         {/* Actions */}
-        <div className="flex items-center justify-end gap-2 px-5 py-3 border-t border-ghost-border">
+        <div className="flex items-center justify-end gap-2 px-5 py-3 border-t border-[var(--border-color)]">
           <button
             onClick={handleReject}
             disabled={submitting}
-            className="px-4 py-1.5 text-xs text-text-muted hover:text-text-primary transition-colors disabled:opacity-50 glass-btn !rounded-full"
+            className="px-4 py-1.5 text-xs text-text-muted hover:text-text-primary transition-colors disabled:opacity-50 glass-btn"
           >
             Skip
           </button>
           <button
             onClick={handleSubmit}
             disabled={submitting || selections.every((s, i) => s.length === 0 && !customInputs[i].trim())}
-            className="px-5 py-1.5 bg-ember text-obsidian rounded-full text-xs font-display font-semibold tracking-wide hover:bg-ember-light transition-all shadow-[0_0_20px_var(--color-ember-glow)] hover:shadow-[0_0_30px_var(--color-ember-glow)] disabled:opacity-30 disabled:shadow-none disabled:cursor-not-allowed"
+            className="px-5 py-1.5 bg-[#fb923c] text-[#0F172A] text-xs font-display font-semibold tracking-wide hover:bg-[#f97316] transition-all disabled:opacity-30 disabled:cursor-not-allowed"
           >
             Submit
           </button>

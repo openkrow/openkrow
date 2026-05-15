@@ -46,7 +46,7 @@ export default function SessionHistory({ onSelect, onClose, currentSessionId }: 
       ref={ref}
       className="absolute top-14 right-3 w-72 max-h-96 overflow-y-auto glass-elevated z-50 animate-reveal"
     >
-      <div className="px-4 py-3 border-b border-ghost-border">
+      <div className="px-4 py-3 border-b border-[var(--border-color)]">
         <span className="font-mono text-[11px] uppercase tracking-[0.2em] text-text-muted">History</span>
       </div>
       {loading ? (
@@ -59,8 +59,8 @@ export default function SessionHistory({ onSelect, onClose, currentSessionId }: 
             <button
               key={session.id}
               onClick={() => onSelect(session)}
-              className={`w-full text-left px-4 py-2.5 text-xs hover:bg-ghost-hover transition-colors flex items-center justify-between gap-3 ${
-                session.id === currentSessionId ? "bg-ember-subtle text-ember-light" : "text-text-primary"
+              className={`w-full text-left px-4 py-2.5 text-xs hover:bg-surface-200 transition-colors flex items-center justify-between gap-3 ${
+                session.id === currentSessionId ? "bg-[#fb923c]/10 text-[#fb923c]" : "text-text-primary"
               }`}
             >
               <span className="truncate">{session.title}</span>

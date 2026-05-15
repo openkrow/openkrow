@@ -4,7 +4,7 @@ import type { ProviderInfo, McpServerInfo, ProviderAuthPrompt, ProviderOAuthStar
 
 export default function App() {
   return (
-    <div className="flex flex-col h-screen bg-surface text-text-primary">
+    <div className="flex flex-col h-screen text-text-primary">
       {/* Draggable title bar area */}
       <div className="shrink-0" style={{ height: "1.75rem", WebkitAppRegion: "drag" } as any} />
 
@@ -94,7 +94,7 @@ function ProvidersTab() {
               ) : (
                 <button
                   onClick={() => setEditingProvider(editingProvider === provider.id ? null : provider.id)}
-                  className="font-mono text-[10px] px-3 py-1 bg-ember/10 border border-ember/20 hover:bg-ember/20 rounded-full text-ember-light transition-colors"
+                  className="font-mono text-[10px] px-3 py-1 bg-[#fb923c]/10 border border-[#fb923c]/20 hover:bg-[#fb923c]/20 text-[#fb923c] transition-colors"
                 >
                   Connect
                 </button>
@@ -262,17 +262,17 @@ function ProviderAuthForm({ provider, onDone, onCancel }: {
   const inputClasses = "w-full glass-input px-3.5 py-2 text-xs text-text-primary placeholder:text-text-faint outline-none transition-colors";
 
   return (
-    <div className="mt-4 pt-4 border-t border-ghost-border space-y-3">
+    <div className="mt-4 pt-4 border-t border-[var(--border-color)] space-y-3">
       {methods.length > 1 && (
         <div className="flex gap-2">
           {methods.map((m, i) => (
             <button
               key={i}
               onClick={() => { setSelectedMethod(i); setOauthStep(null); setOauthCode(""); setOauthWaiting(false); setError(null); setInputs({}); }}
-              className={`px-3 py-1 font-mono text-[11px] rounded-full border transition-colors ${
+              className={`px-3 py-1 font-mono text-[11px] border transition-colors ${
                 selectedMethod === i
-                  ? "bg-ember-subtle border-ember/30 text-ember-light"
-                  : "border-ghost-border text-text-muted hover:text-text-primary"
+                  ? "bg-[#fb923c]/10 border-[#fb923c]/30 text-[#fb923c]"
+                  : "border-[var(--border-color)] text-text-muted hover:text-text-primary"
               }`}
             >
               {m.label}
@@ -338,11 +338,11 @@ function ProviderAuthForm({ provider, onDone, onCancel }: {
             {oauthStep.instructions || (oauthStep.method === "auto" ? "Complete authorization in your browser." : oauthStep.opened ? "A browser window has opened. Paste the authorization code below." : "Open the authorization link, then paste the authorization code below.")}
           </p>
           {oauthStep.url && (
-            <div className="space-y-1.5 rounded-lg border border-ghost-border bg-surface-100/70 p-2.5">
+            <div className="space-y-1.5 border border-[var(--border-color)] bg-surface-100 p-2.5">
               <button
                 type="button"
                 onClick={() => handleOAuthLinkOpen(oauthStep.url)}
-                className="font-mono text-[11px] text-ember-light hover:text-ember transition-colors"
+                className="font-mono text-[11px] text-[#fb923c] hover:text-[#f97316] transition-colors"
               >
                 Open authorization link
               </button>
@@ -375,7 +375,7 @@ function ProviderAuthForm({ provider, onDone, onCancel }: {
       <div className="flex gap-2 justify-end">
         <button
           onClick={onCancel}
-          className="px-4 py-1.5 text-xs text-text-muted hover:text-text-primary transition-colors glass-btn !rounded-full"
+          className="px-4 py-1.5 text-xs text-text-muted hover:text-text-primary transition-colors glass-btn"
         >
           Cancel
         </button>
@@ -383,7 +383,7 @@ function ProviderAuthForm({ provider, onDone, onCancel }: {
           <button
             onClick={handleApiSubmit}
             disabled={saving}
-            className="px-5 py-1.5 bg-ember text-obsidian rounded-full text-xs font-display font-semibold hover:bg-ember-light transition-all shadow-[0_0_20px_var(--color-ember-glow)] disabled:opacity-40 disabled:shadow-none"
+            className="px-5 py-1.5 bg-[#fb923c] text-[#0F172A] text-xs font-display font-semibold hover:bg-[#f97316] transition-all disabled:opacity-40"
           >
             {saving ? "Saving..." : "Save"}
           </button>
@@ -392,7 +392,7 @@ function ProviderAuthForm({ provider, onDone, onCancel }: {
           <button
             onClick={handleOAuthStart}
             disabled={saving}
-            className="px-5 py-1.5 bg-ember text-obsidian rounded-full text-xs font-display font-semibold hover:bg-ember-light transition-all shadow-[0_0_20px_var(--color-ember-glow)] disabled:opacity-40 disabled:shadow-none"
+            className="px-5 py-1.5 bg-[#fb923c] text-[#0F172A] text-xs font-display font-semibold hover:bg-[#f97316] transition-all disabled:opacity-40"
           >
             {saving ? "Opening..." : "Authorize"}
           </button>
@@ -401,7 +401,7 @@ function ProviderAuthForm({ provider, onDone, onCancel }: {
           <button
             onClick={handleOAuthComplete}
             disabled={saving || oauthWaiting || oauthStep.method === "auto" || !oauthCode.trim()}
-            className="px-5 py-1.5 bg-ember text-obsidian rounded-full text-xs font-display font-semibold hover:bg-ember-light transition-all shadow-[0_0_20px_var(--color-ember-glow)] disabled:opacity-40 disabled:shadow-none"
+            className="px-5 py-1.5 bg-[#fb923c] text-[#0F172A] text-xs font-display font-semibold hover:bg-[#f97316] transition-all disabled:opacity-40"
           >
             {oauthWaiting ? "Waiting..." : saving ? "Verifying..." : "Submit Code"}
           </button>
@@ -473,7 +473,7 @@ function McpTab() {
       case "connected": return "text-emerald-400";
       case "disabled": return "text-text-faint";
       case "failed": return "text-red-400";
-      case "needs_auth": return "text-ember-light";
+      case "needs_auth": return "text-[#fb923c]";
       default: return "text-text-muted";
     }
   };
@@ -483,7 +483,7 @@ function McpTab() {
       case "connected": return "bg-emerald-400";
       case "disabled": return "bg-surface-500";
       case "failed": return "bg-red-400";
-      case "needs_auth": return "bg-ember";
+      case "needs_auth": return "bg-[#fb923c]";
       default: return "bg-surface-500";
     }
   };
@@ -510,7 +510,7 @@ function McpTab() {
               {server.status === "failed" && (
                 <button
                   onClick={() => handleReconnect(server.name)}
-                  className="font-mono text-[10px] px-3 py-1 bg-ember/10 border border-ember/20 hover:bg-ember/20 rounded-full text-ember-light transition-colors"
+                  className="font-mono text-[10px] px-3 py-1 bg-[#fb923c]/10 border border-[#fb923c]/20 hover:bg-[#fb923c]/20 text-[#fb923c] transition-colors"
                 >
                   Reconnect
                 </button>
@@ -545,20 +545,20 @@ function McpTab() {
           <div className="flex gap-2">
             <button
               onClick={() => setAddType("local")}
-              className={`px-3 py-1 font-mono text-[11px] rounded-full border transition-colors ${
+              className={`px-3 py-1 font-mono text-[11px] border transition-colors ${
                 addType === "local"
-                  ? "bg-ember-subtle border-ember/30 text-ember-light"
-                  : "border-ghost-border text-text-muted hover:text-text-primary"
+                  ? "bg-[#fb923c]/10 border-[#fb923c]/30 text-[#fb923c]"
+                  : "border-[var(--border-color)] text-text-muted hover:text-text-primary"
               }`}
             >
               Local
             </button>
             <button
               onClick={() => setAddType("remote")}
-              className={`px-3 py-1 font-mono text-[11px] rounded-full border transition-colors ${
+              className={`px-3 py-1 font-mono text-[11px] border transition-colors ${
                 addType === "remote"
-                  ? "bg-ember-subtle border-ember/30 text-ember-light"
-                  : "border-ghost-border text-text-muted hover:text-text-primary"
+                  ? "bg-[#fb923c]/10 border-[#fb923c]/30 text-[#fb923c]"
+                  : "border-[var(--border-color)] text-text-muted hover:text-text-primary"
               }`}
             >
               Remote
@@ -598,7 +598,7 @@ function McpTab() {
             <button
               onClick={handleAdd}
               disabled={saving || !addName.trim() || (addType === "local" ? !addCommand.trim() : !addUrl.trim())}
-              className="px-5 py-1.5 bg-ember text-obsidian rounded-full text-xs font-display font-semibold hover:bg-ember-light transition-all shadow-[0_0_20px_var(--color-ember-glow)] disabled:opacity-40 disabled:shadow-none"
+              className="px-5 py-1.5 bg-[#fb923c] text-[#0F172A] text-xs font-display font-semibold hover:bg-[#f97316] transition-all disabled:opacity-40"
             >
               Add Server
             </button>
@@ -607,7 +607,7 @@ function McpTab() {
       ) : (
         <button
           onClick={() => setShowAdd(true)}
-          className="w-full py-3 glass-card !border-dashed !border-surface-400 font-mono text-[11px] text-text-muted hover:text-ember-light hover:!border-ember/30 transition-colors"
+          className="w-full py-3 glass-card !border-dashed !border-surface-400 font-mono text-[11px] text-text-muted hover:text-[#fb923c] hover:!border-[#fb923c]/30 transition-colors"
         >
           + Add MCP Server
         </button>
