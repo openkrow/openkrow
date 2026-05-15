@@ -225,8 +225,7 @@ export default function App() {
           {/* Logo mark */}
           <div className="relative">
             <div className="w-14 h-14 rounded-2xl glass-card flex items-center justify-center">
-              <span className="font-display text-2xl font-bold text-primary tracking-tight">K</span>
-              <div className="absolute -top-0.5 -right-0.5 w-3 h-3 rounded-full bg-ember shadow-[0_0_12px_var(--color-ember-glow)]" />
+              <img src="views://mainview/logo.png" alt="Krow" className="w-10 h-10 rounded-lg" />
             </div>
           </div>
 
@@ -262,8 +261,7 @@ export default function App() {
       >
         <div className="flex items-center gap-2.5" style={{ WebkitAppRegion: "no-drag" } as any}>
           <div className="relative w-7 h-7 rounded-lg glass-btn flex items-center justify-center !rounded-lg">
-            <span className="font-display text-xs font-bold text-primary">K</span>
-            <div className="absolute -top-px -right-px w-1.5 h-1.5 rounded-full bg-ember" />
+            <img src="views://mainview/logo.png" alt="Krow" className="w-5 h-5 rounded" />
           </div>
           <h1 className="font-display text-sm font-semibold text-primary tracking-tight">Krow</h1>
         </div>

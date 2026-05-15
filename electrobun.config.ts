@@ -24,6 +24,7 @@ export default {
     copy: {
       "mainview/index.html": "views/mainview/index.html",
       "mainview/styles.css": "views/mainview/styles.css",
+      "mainview/logo.png": "views/mainview/logo.png",
       "settingsview/index.html": "views/settingsview/index.html",
     },
   },
