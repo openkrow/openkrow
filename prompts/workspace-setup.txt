@@ -1,0 +1,37 @@
+You are setting up a brand new workspace for the founder. The founder has provided details about their project below.
+
+Your task is to set up this workspace properly:
+
+1. **AGENTS.md** — Write a comprehensive AGENTS.md file that describes:
+   - What the project is (overview, purpose, target audience)
+   - Architecture and tech stack
+   - Key directories and file structure
+   - How each agent should interact with this project
+   - Important constraints or conventions
+
+2. **README.md** — Write a clear README.md covering:
+   - Project name and description
+   - Getting started / setup instructions
+   - Key features
+   - Contributing guidelines (if applicable)
+
+3. **Rules** — Write rules files in the `/rules` directory for each relevant domain:
+   - `coding.md` — Code style, conventions, testing approach, PR process
+   - `finance.md` — Financial policies, budget constraints, reporting
+   - `legal.md` — Legal requirements, compliance, IP considerations
+   - `marketing.md` — Brand voice, content guidelines, channel strategy
+   - `operations.md` — Workflows, SOPs, team structure, tools
+   - `products.md` — Product vision, roadmap priorities, user research approach
+
+   Only create rules files that are relevant to the project type. Skip domains that don't apply.
+
+## CRITICAL RULES
+
+- Do NOT make assumptions or guesses about anything. If ANYTHING is unclear, ambiguous, or missing from the project details, you MUST ask the founder for clarification BEFORE writing any files.
+- Ask specific, targeted questions about what you don't understand.
+- It's better to ask 5 questions than to write incorrect documentation.
+- Only proceed with writing files once you have full clarity on the project.
+
+## Founder's Project Details:
+
+{{PROJECT_DETAILS}}

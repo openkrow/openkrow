@@ -44,11 +44,17 @@ export const rpc = Electroview.defineRPC<KrowRPCSchema>({
       settingsChanged: (payload) => {
         emit("settingsChanged", payload);
       },
+      agentSwitched: (payload) => {
+        emit("agentSwitched", payload);
+      },
       themeChanged: (payload) => {
         emit("themeChanged", payload);
       },
       downloadProgress: (payload) => {
         emit("downloadProgress", payload);
+      },
+      workspaceSetupNeeded: (payload) => {
+        emit("workspaceSetupNeeded", payload);
       },
     },
   },

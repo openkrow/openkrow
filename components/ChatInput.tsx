@@ -103,7 +103,7 @@ export default function ChatInput({ onSend, onStop, disabled, sending, onModelCh
             value={input}
             onChange={handleInput}
             onKeyDown={handleKeyDown}
-            placeholder="Message Krow..."
+            placeholder="Message your team..."
             rows={1}
             className="w-full bg-transparent text-text-primary px-4 pt-3.5 pb-11 text-sm resize-none outline-none placeholder:text-text-faint leading-relaxed"
           />

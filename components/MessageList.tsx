@@ -153,7 +153,14 @@ export default function MessageList({ messages, sending }: Props) {
                 ? "glass-card border-[#fb923c]/30 bg-[#fb923c]/[0.06] text-text-primary"
                 : "glass-card text-text-primary"
             }`}
+            style={msg.role === "assistant" && msg.agentColor ? { borderLeftColor: msg.agentColor, borderLeftWidth: "3px" } : undefined}
           >
+            {msg.role === "assistant" && msg.agent && (
+              <div className="flex items-center gap-1.5 mb-1.5">
+                <span className="w-2 h-2 rounded-full" style={{ backgroundColor: msg.agentColor ?? "#6B7280" }} />
+                <span className="font-mono text-[10px] uppercase tracking-wider text-text-muted">{msg.agent}</span>
+              </div>
+            )}
             {msg.role === "assistant" && msg.parts && msg.parts.length > 0 ? (
               <PartsView parts={msg.parts} />
             ) : msg.role === "assistant" ? (

@@ -129,8 +129,8 @@ const win = new BrowserWindow({
   url: "views://mainview/index.html",
   rpc,
   frame: {
-    width: 500,
-    height: 800,
+    width: 900,
+    height: 700,
     x: 0,
     y: 0,
   },

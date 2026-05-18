@@ -1,9 +1,8 @@
 import { createOpencode } from "@opencode-ai/sdk/v2";
 import type { OpencodeClient } from "@opencode-ai/sdk/v2";
 import type { ChatMessage, MessagePart, ProviderInfo, ProviderAuthData, ProviderAuthMethod, ProviderOAuthStart, McpServerInfo, McpLocalConfig, McpRemoteConfig } from "../shared/types";
-import { krowAgent } from "./agent";
+import { agents, agentMeta } from "./agents";
 import { EventStream, type RpcSend } from "./stream";
-import { SkillInstaller } from "./skills";
 
 /**
  * Manages the opencode workspace lifecycle: server, session, and messaging.
@@ -34,16 +33,12 @@ export class WorkspaceManager {
     this.abortController = new AbortController();
     process.chdir(path);
 
-    SkillInstaller.install(path).catch((err: any) => {
-      console.error("Failed to setup agent skills:", err?.message);
-    });
-
     const result = await createOpencode({
       port: 0,
       timeout: 15000,
       signal: this.abortController.signal,
       config: {
-        agent: { krow: krowAgent },
+        agent: agents,
         plugin: [],
       },
     });
@@ -156,7 +151,7 @@ export class WorkspaceManager {
 
     await this.client.session.promptAsync({
       sessionID: sessionId,
-      agent: "krow",
+      agent: "cofounder",
       parts: [{ type: "text", text }],
       model: model ?? { providerID: "opencode", modelID: "big-pickle" },
     });
@@ -168,6 +163,13 @@ export class WorkspaceManager {
   async stopSession(sessionId: string): Promise<void> {
     if (!this.client) throw new Error("No workspace active");
     await this.client.session.abort({ sessionID: sessionId });
+  }
+
+  /**
+   * List available agents with metadata.
+   */
+  getAgents() {
+    return agentMeta;
   }
 
   /**

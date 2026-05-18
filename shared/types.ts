@@ -58,6 +58,8 @@ export type ChatMessage = {
   createdAt: number;
   isLoading?: boolean;
   parts?: MessagePart[];
+  agent?: string;
+  agentColor?: string;
 };
 
 export type ModelInfo = {
@@ -151,6 +153,13 @@ export type McpRemoteConfig = {
 
 export type Theme = "dark" | "light" | "system";
 
+export type AgentInfo = {
+  name: string;
+  label: string;
+  color: string;
+  description: string;
+};
+
 export type SettingsRPCSchema = {
   bun: {
     requests: {
@@ -213,6 +222,12 @@ export type SettingsRPCSchema = {
   };
 };
 
+export type WorkspaceValidation = {
+  path: string;
+  exists: boolean;
+  hasAgentsMd: boolean;
+};
+
 export type KrowRPCSchema = {
   bun: {
     requests: {
@@ -227,6 +242,30 @@ export type KrowRPCSchema = {
       initWorkspace: {
         params: {};
         response: { path: string } | { error: string };
+      };
+      getLastWorkspace: {
+        params: {};
+        response: { path: string | null };
+      };
+      pickFolder: {
+        params: {};
+        response: { path: string } | { cancelled: true } | { error: string };
+      };
+      validateWorkspace: {
+        params: { path: string };
+        response: WorkspaceValidation | { error: string };
+      };
+      setupNewWorkspace: {
+        params: { path: string };
+        response: { success: boolean } | { error: string };
+      };
+      initWorkspaceWithPath: {
+        params: { path: string };
+        response: { path: string } | { error: string };
+      };
+      sendSetupPrompt: {
+        params: { sessionId: string; projectDetails: string };
+        response: { success: boolean } | { error: string };
       };
       createSession: {
         params: {};
@@ -259,6 +298,10 @@ export type KrowRPCSchema = {
       openSettings: {
         params: {};
         response: { success: boolean };
+      };
+      listAgents: {
+        params: {};
+        response: { agents: AgentInfo[] };
       };
       replyQuestion: {
         params: { requestId: string; answers: string[][] };
@@ -318,14 +361,16 @@ export type KrowRPCSchema = {
     messages: {
       workspaceReady: { path: string };
       workspaceError: { error: string };
-      partUpdated: { sessionId: string; messageId: string; part: MessagePart; delta?: string };
+      partUpdated: { sessionId: string; messageId: string; part: MessagePart; delta?: string; agent?: string; agentColor?: string };
       messageComplete: { sessionId: string; messageId: string };
       sessionStatus: { sessionId: string; status: "idle" | "busy" | "retry" };
       sessionError: { sessionId: string; error: string };
       questionAsked: QuestionRequest;
+      agentSwitched: { sessionId: string; agent: string; color: string };
       settingsChanged: {};
       themeChanged: { theme: Theme };
       downloadProgress: { message: string };
+      workspaceSetupNeeded: { path: string };
     };
   };
 };
